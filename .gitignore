@@ -43,3 +43,12 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Internal planning docs (local-only, never commit)
+plan/
+
+# AI tooling / agent harness — never commit per project ground rules
+.agents/
+.claude/
+CLAUDE.md
+skills-lock.json

@@ -1,0 +1,189 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>MendLog · Design</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+Sinhala:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin: 0; padding: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  * { box-sizing: border-box; }
+  button, input, div { font-feature-settings: "ss01", "cv11"; }
+  button { font-family: inherit; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #d5d0c2; border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="components/tokens.jsx"></script>
+<script type="text/babel" src="components/data.jsx"></script>
+<script type="text/babel" src="components/shared.jsx"></script>
+<script type="text/babel" src="components/design-canvas.jsx"></script>
+<script type="text/babel" src="components/screens-a.jsx"></script>
+<script type="text/babel" src="components/screens-b.jsx"></script>
+<script type="text/babel" src="components/screens-c.jsx"></script>
+
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+// ─── Interactive Prototype (single phone, navigable) ───────────────────
+function Prototype() {
+  const initial = (typeof localStorage !== 'undefined' && localStorage.getItem('mendlog.screen')) || 'home';
+  const [screen, setScreen] = useState(initial);
+  const [calView, setCalView] = useState('list');
+
+  useEffect(() => { try { localStorage.setItem('mendlog.screen', screen); } catch {} }, [screen]);
+
+  const onTab = (t) => {
+    if (t === 'new') setScreen('capture');
+    else if (t === 'home') setScreen('home');
+    else if (t === 'jobs') setScreen('jobs');
+    else if (t === 'search') setScreen('search');
+    else if (t === 'me') setScreen('profile');
+  };
+
+  let content;
+  switch (screen) {
+    case 'splash': content = <SplashScreen/>; break;
+    case 'signin': content = <SignInScreen/>; break;
+    case 'perm': content = <PermissionsScreen step={1}/>; break;
+    case 'home': content = <HomeScreen onTab={onTab} onOpenJob={() => setScreen('detail')} onOpenDay={() => setScreen('day')}/>; break;
+    case 'capture': content = <NewJobCapture photos={2} clips={2} recording onOpenCam={() => setScreen('camera')} onOpenVoice={() => setScreen('voice')} onNext={() => setScreen('review')} onBack={() => setScreen('home')}/>; break;
+    case 'camera': content = <CameraScreen onClose={() => setScreen('capture')}/>; break;
+    case 'voice': content = <VoiceSheet onClose={() => setScreen('capture')}/>; break;
+    case 'review': content = <NewJobReview onBack={() => setScreen('capture')} onNext={() => setScreen('signoff')}/>; break;
+    case 'signoff': content = <NewJobSignoff onBack={() => setScreen('review')} onFile={() => { setScreen('filed'); setTimeout(() => setScreen('detail'), 1500); }}/>; break;
+    case 'filed': content = <FiledSuccessScreen/>; break;
+    case 'jobs': content = <JobsScreen onTab={onTab} view={calView} setView={setCalView} onOpenJob={() => setScreen('detail')} onOpenDay={() => setScreen('day')}/>; break;
+    case 'day': content = <DayView onBack={() => setScreen('jobs')} onOpenJob={() => setScreen('detail')}/>; break;
+    case 'detail': content = <JobDetail onBack={() => setScreen('jobs')}/>; break;
+    case 'search': content = <SearchScreen onTab={onTab} onOpenResult={() => setScreen('result')}/>; break;
+    case 'result': content = <SearchResultDetail onBack={() => setScreen('search')} onNewFromResult={() => setScreen('review')}/>; break;
+    case 'profile': content = <ProfileScreen onTab={onTab} onOpenDay={() => setScreen('day')} onOpenCalendar={() => { setCalView('calendar'); setScreen('jobs'); }}/>; break;
+    case 'settings': content = <SettingsScreen onBack={() => setScreen('profile')}/>; break;
+    case 'pdf': content = <PDFExport onBack={() => setScreen('detail')}/>; break;
+    case 'sync': content = <SyncQueue onBack={() => setScreen('home')}/>; break;
+    default: content = <HomeScreen onTab={onTab}/>;
+  }
+
+  const jumps = [
+    ['splash', 'Splash'], ['signin', 'Sign in'], ['perm', 'Permissions'],
+    ['home', 'Home'], ['capture', 'New Job / Capture'], ['voice', 'Voice sheet'], ['camera', 'Camera'],
+    ['review', 'Review'], ['signoff', 'Sign-off'], ['filed', 'Filed'],
+    ['jobs', 'Jobs list'], ['day', 'Day view'], ['detail', 'Job detail'],
+    ['search', 'Search'], ['result', 'Search result'],
+    ['profile', 'Profile / Me'], ['settings', 'Settings'], ['pdf', 'PDF export'], ['sync', 'Sync queue'],
+  ];
+
+  return (
+    <div style={{ display: 'flex', gap: 32, padding: '40px 56px', alignItems: 'flex-start', fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <Phone>{content}</Phone>
+      <div style={{ width: 240, flexShrink: 0, position: 'sticky', top: 40 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1, color: '#605C53', marginBottom: 12 }}>Navigate</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {jumps.map(([k, l]) => (
+            <button key={k} onClick={() => setScreen(k)} style={{
+              textAlign: 'left', padding: '8px 12px', borderRadius: 8,
+              border: 'none', background: screen === k ? '#1E3A5F' : 'transparent',
+              color: screen === k ? '#fff' : '#1A1A1A',
+              fontSize: 13, fontWeight: screen === k ? 700 : 500, cursor: 'pointer',
+            }}>{l}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: '#8A8679', marginTop: 16, lineHeight: 1.5, padding: '12px', background: '#f5f2e9', borderRadius: 10 }}>
+          Tap around — FAB, nav, cards are live.<br/>
+          Tabs remember your last view.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── All-screens canvas ───────────────────────────────────────────────
+function AllScreens() {
+  return (
+    <DesignCanvas>
+      <div style={{ padding: '20px 60px 40px' }}>
+        <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: -1, color: 'rgba(40,30,20,0.9)' }}>MendLog</div>
+        <div style={{ fontSize: 14, color: 'rgba(60,50,40,0.65)', marginTop: 4, maxWidth: 600 }}>
+          Voice-first field journal for industrial repair techs. 17 screens + subviews — workwear palette, large targets, offline-first.
+        </div>
+        <div style={{ display: 'flex', gap: 20, marginTop: 16, fontSize: 11.5, color: 'rgba(60,50,40,0.55)' }}>
+          <span>◆ Navy #1E3A5F</span><span>◆ Hazard #F5B800</span><span>◆ Emerald #1F9D55</span>
+          <span style={{ marginLeft: 'auto' }}>Drag to pan · pinch to zoom</span>
+        </div>
+      </div>
+
+      <DCSection title="1 · Entry" subtitle="Splash → sign in → permissions onboarding">
+        <DCArtboard label="1. Splash"><Phone width={340} height={720}><SplashScreen/><GestureBar dark/></Phone></DCArtboard>
+        <DCArtboard label="2. Sign in"><Phone width={340} height={720}><SignInScreen/></Phone></DCArtboard>
+        <DCArtboard label="3a. Permissions · Mic"><Phone width={340} height={720}><PermissionsScreen step={1}/></Phone></DCArtboard>
+        <DCArtboard label="3b. Permissions · Camera"><Phone width={340} height={720}><PermissionsScreen step={2}/></Phone></DCArtboard>
+        <DCArtboard label="3c. Permissions · Library"><Phone width={340} height={720}><PermissionsScreen step={3}/></Phone></DCArtboard>
+      </DCSection>
+
+      <DCSection title="2 · Home" subtitle="Today card + activity heatmap + quick stats">
+        <DCArtboard label="4. Home"><Phone width={360} height={760}><HomeScreen/></Phone></DCArtboard>
+      </DCSection>
+
+      <DCSection title="3 · New Job flow" subtitle="Voice-first capture → AI review → sign-off">
+        <DCArtboard label="5a. Capture · idle"><Phone width={340} height={720}><NewJobCapture photos={0} clips={0}/></Phone></DCArtboard>
+        <DCArtboard label="5b. Capture · recording"><Phone width={340} height={720}><NewJobCapture photos={2} clips={2} recording/></Phone></DCArtboard>
+        <DCArtboard label="10. Camera"><Phone width={340} height={720}><CameraScreen/></Phone></DCArtboard>
+        <DCArtboard label="11. Voice recorder sheet"><Phone width={340} height={720}><VoiceSheet/></Phone></DCArtboard>
+        <DCArtboard label="6. Review · AI-filled"><Phone width={340} height={720}><NewJobReview/></Phone></DCArtboard>
+        <DCArtboard label="7. Sign-off"><Phone width={340} height={720}><NewJobSignoff/></Phone></DCArtboard>
+        <DCArtboard label="Filed success"><Phone width={340} height={720}><FiledSuccessScreen/></Phone></DCArtboard>
+      </DCSection>
+
+      <DCSection title="4 · Jobs" subtitle="List + Calendar toggle · Day view · Detail">
+        <DCArtboard label="8a. Jobs · List"><Phone width={340} height={720}><JobsScreen view="list" setView={() => {}}/></Phone></DCArtboard>
+        <DCArtboard label="8b. Jobs · Calendar"><Phone width={340} height={720}><JobsScreen view="calendar" setView={() => {}}/></Phone></DCArtboard>
+        <DCArtboard label="8c. Day view"><Phone width={340} height={720}><DayView/></Phone></DCArtboard>
+        <DCArtboard label="9. Job detail"><Phone width={340} height={720}><JobDetail/></Phone></DCArtboard>
+      </DCSection>
+
+      <DCSection title="5 · Search & memory" subtitle="Semantic search with voice-clip match highlighting">
+        <DCArtboard label="12. Search + image"><Phone width={340} height={720}><SearchScreen/></Phone></DCArtboard>
+        <DCArtboard label="13. Result detail · why matched"><Phone width={340} height={720}><SearchResultDetail/></Phone></DCArtboard>
+      </DCSection>
+
+      <DCSection title="6 · Me" subtitle="Year-long contribution grid + stats">
+        <DCArtboard label="14. Profile"><Phone width={360} height={760}><ProfileScreen/></Phone></DCArtboard>
+        <DCArtboard label="15. Settings"><Phone width={340} height={720}><SettingsScreen/></Phone></DCArtboard>
+      </DCSection>
+
+      <DCSection title="7 · Outputs" subtitle="Legacy paper form export + offline queue">
+        <DCArtboard label="16. PDF export · F-04-041-2-lk"><Phone width={340} height={720}><PDFExport/></Phone></DCArtboard>
+        <DCArtboard label="17. Sync / offline queue"><Phone width={340} height={720}><SyncQueue/></Phone></DCArtboard>
+      </DCSection>
+
+      <DCSection title="8 · Interactive prototype" subtitle="Live, navigable version — tap anywhere">
+        <DCArtboard label="Prototype — tap anywhere" style={{ background: '#FAFAF7' }}>
+          <Prototype/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCPostIt top={160} right={120} rotate={3}>
+        Record button ≈120dp.<br/>Tap-to-toggle, not hold — for gloves.
+      </DCPostIt>
+      <DCPostIt top={1640} left={60} rotate={-3}>
+        Heatmap ramp reused on home, calendar cells & profile.
+      </DCPostIt>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<AllScreens/>);
+</script>
+</body>
+</html>

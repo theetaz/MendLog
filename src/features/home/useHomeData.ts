@@ -1,0 +1,94 @@
+import { useEffect, useState } from 'react';
+import type { ActivityDay, Job } from '../../types/job';
+import type { JobsRepository } from '../../repositories/JobsRepository';
+import { formatIdle } from '../../utils/idle';
+
+export interface HomeData {
+  today: Job[];
+  activity: ActivityDay[];
+  thisWeekCount: number;
+  avgIdle: string;
+  streak: number;
+  loading: boolean;
+  error: Error | null;
+}
+
+const EMPTY: Omit<HomeData, 'loading' | 'error'> = {
+  today: [],
+  activity: [],
+  thisWeekCount: 0,
+  avgIdle: '0h 0m',
+  streak: 0,
+};
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function offsetIso(date: Date, days: number): string {
+  const d = new Date(date);
+  d.setUTCDate(date.getUTCDate() + days);
+  return isoDate(d);
+}
+
+function computeStreak(jobs: Job[], todayIso: string): number {
+  const dates = new Set(jobs.map((j) => j.date));
+  let streak = 0;
+  let cursor = new Date(`${todayIso}T00:00:00Z`);
+  while (dates.has(isoDate(cursor))) {
+    streak++;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  return streak;
+}
+
+export function useHomeData(
+  repo: JobsRepository,
+  clock: () => Date = () => new Date(),
+): HomeData {
+  const [state, setState] = useState<HomeData>({ ...EMPTY, loading: true, error: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    const todayIso = isoDate(clock());
+    const weekAgoIso = offsetIso(clock(), -6);
+
+    (async () => {
+      try {
+        const [jobs, activity] = await Promise.all([repo.listJobs(), repo.getActivity(12)]);
+        if (cancelled) return;
+
+        const today = jobs.filter((j) => j.date === todayIso);
+        const thisWeekJobs = jobs.filter((j) => j.date >= weekAgoIso && j.date <= todayIso);
+        const totalIdle = thisWeekJobs.reduce((sum, j) => sum + j.idleMinutes, 0);
+        const avgIdleMinutes = thisWeekJobs.length === 0
+          ? 0
+          : Math.floor(totalIdle / thisWeekJobs.length);
+
+        setState({
+          today,
+          activity,
+          thisWeekCount: thisWeekJobs.length,
+          avgIdle: formatIdle(avgIdleMinutes),
+          streak: computeStreak(jobs, todayIso),
+          loading: false,
+          error: null,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err instanceof Error ? err : new Error(String(err)),
+        }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo]);
+
+  return state;
+}

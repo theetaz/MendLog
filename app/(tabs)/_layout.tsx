@@ -1,35 +1,41 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs, useRouter, useSegments } from 'expo-router';
+import { TabBar, type TabId } from '../../src/design/components/TabBar';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+const ROUTE_TO_TAB: Record<string, TabId> = {
+  index: 'home',
+  jobs: 'jobs',
+  search: 'search',
+  me: 'me',
+};
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+const TAB_TO_ROUTE: Record<TabId, string> = {
+  home: '/(tabs)/',
+  jobs: '/(tabs)/jobs',
+  search: '/(tabs)/search',
+  me: '/(tabs)/me',
+  new: '/new-job',
+};
+
+export default function TabsLayout() {
+  const router = useRouter();
+  const segments = useSegments() as string[];
+  const last = segments[segments.length - 1] ?? 'index';
+  const active: TabId = ROUTE_TO_TAB[last] ?? 'home';
 
   return (
     <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
+      screenOptions={{ headerShown: false }}
+      tabBar={() => (
+        <TabBar
+          active={active}
+          onTab={(id) => router.push(TAB_TO_ROUTE[id] as never)}
+        />
+      )}
+    >
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="jobs" />
+      <Tabs.Screen name="search" />
+      <Tabs.Screen name="me" />
     </Tabs>
   );
 }

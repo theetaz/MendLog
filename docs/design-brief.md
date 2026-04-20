@@ -88,7 +88,7 @@ Logo on `#0E0E0E`, brief auth check, routes to Sign In or Home.
 ### 4. Home
 - **Top bar**: "Hello, Nuwan" + sync status dot (green/amber/red)
 - **Today card**: big number "3 jobs today", list of today's jobs with time + machine name. Tap → job detail
-- **Contribution grid**: GitHub-style 12-week heatmap of jobs per day. Max 8 rows tall
+- **Contribution grid** (compact variant): GitHub-style 12-week heatmap of jobs per day. Max 8 rows tall. Tap any cell → **Day View** (screen 8a). Tap "See full year →" link → Profile tab with the full grid
 - **Quick stats row**: this-week jobs, avg idle time, streak
 - **Primary FAB**: `+ New Job` (matches center tab; prominent on this screen too)
 - **Empty state**: "No jobs yet today — tap + to start."
@@ -131,12 +131,39 @@ Error state: if AI couldn't parse a field, show empty field with "⚠ couldn't f
 - Big "File this job" button at the bottom
 - **Success**: confetti-free → "Filed. Job #127 saved." → auto-navigates to Job Detail after 1.5s
 
-### 8. Jobs List
-- Top: search icon + filter icon (filter opens bottom sheet: date range, machine, status {open / awaiting-TL / complete}, department)
+### 8. Jobs (List + Calendar)
+**Top bar**: search icon, filter icon, and a **view-toggle** on the far right — two segments: `List` / `Calendar`. Remembers last-used view.
+
+**List view** (default):
+- Filter icon opens bottom sheet: date range, machine, status {open / awaiting-TL / complete}, department
 - List items: horizontal card — left = machine name bold + department small, right = date + small status pill, bottom edge = truncated root-cause snippet. Thumbnail of first photo on the right
 - Sticky section headers by date ("Today", "Yesterday", "Last week", "March 2026")
 - Infinite scroll
 - Empty state: illustration + "No jobs match these filters."
+
+**Calendar view**:
+- Monthly grid (Mon–Sun rows), current month by default. Swipe left/right to change months. Small month/year pill at top is tappable → year picker
+- Each day cell shows:
+  - The date number (top-left)
+  - A job count badge (top-right) if there were jobs that day — e.g. "3"
+  - A small intensity fill based on job count (same color ramp as the contribution grid on the profile)
+  - Today's cell has a ring outline
+- Tap a day → **Day View** (screen 8a) opens as a bottom-up full-screen
+- Long-press a day → quick peek popover showing the 1–3 machines worked on, with "Open day" button
+- Empty-month state: "No jobs logged in March 2026." with a "Jump to today" link
+- Sinhala: weekday labels respect locale (Mon → සඳු, etc.) when Sinhala UI is active
+
+### 8a. Day View
+Reached from: Jobs → Calendar → tap day, OR Profile contribution grid → tap cell, OR Home "today" card → "See full day".
+
+- **Header**: big date, e.g. "Wednesday, 15 March 2026". Tiny "Today" / "Yesterday" relative label underneath. Left arrow and right arrow on either side of the date to step by ±1 day (swipeable too)
+- **Day summary strip**: jobs count, total idle time, first job start → last job end window, unique machines touched. Four compact stat tiles
+- **Timeline**: vertical timeline of jobs for that day, ordered by `date & time reported`
+  - Each row: time on the left (e.g. "09:14"), then a job card (same `Job card` component, compact variant)
+  - Connector line between rows with a small idle-time pill ("2h 30m idle" between jobs)
+  - Voice clips and photo count shown as small icons on the card
+- **Empty state** (day with no jobs): greyed-out day with "Nothing logged on this day." and two buttons: "Add a job for this date" (back-dated entry) and "Back to calendar"
+- **Bottom action**: "Export this day as PDF" (shares a summary sheet — good for weekly reports)
 
 ### 9. Job Detail
 - **Header**: machine name, dept, date, status pill
@@ -171,10 +198,21 @@ Error state: if AI couldn't parse a field, show empty field with "⚠ couldn't f
 - "Copy diagnosis to new job" button — creates a pre-filled new job
 
 ### 14. Me (Profile + Stats)
-- Avatar, name, role, years on the job
-- Big contribution grid (full year, zoomable)
-- Stat tiles: total jobs, avg idle time, most common root cause, top 3 machines worked on
-- "Since you joined" meta
+- **Header**: avatar, name, role, years on the job, "Member since Feb 2024" meta
+- **Contribution grid** (this is the GitHub-activity-tracker-style block, and it's a featured element of this screen):
+  - Full year (52 weeks × 7 days), rows = weekdays, columns = weeks, reading left-to-right, oldest → newest
+  - Color ramp: empty day = neutral-100, 1 job = emerald-200, 2–3 jobs = emerald-400, 4–6 = emerald-600, 7+ = emerald-800 (same ramp reused in the Calendar view day-cell intensity)
+  - Month labels above the grid (Jan, Feb, Mar…) aligned to the first week of each month
+  - Weekday labels on the left (Mon / Wed / Fri — skip alternating ones to save space)
+  - Horizontally scrollable when year doesn't fit screen width; pinch-to-zoom for a denser/wider view
+  - **Interactive**:
+    - Tap a cell → small popover tooltip: date + "3 jobs on this day" + a "See day" link that opens the **Day View** (screen 8a)
+    - Long-press a cell → same tooltip sticks open until dismissed
+  - Legend underneath: "Less ▢▢▢▢▢ More"
+  - Below the grid, a one-liner summary: "167 jobs in the last year. Longest streak: 14 days. Current streak: 3 days."
+- **Year selector**: small chips above the grid — "This year / Last year / 2024" — lets the technician browse history
+- **Stat tiles** (2×2 grid below contribution): total jobs, avg idle time, most common root cause, top 3 machines worked on
+- **Quick-access row**: `[ Open calendar ]` button that deep-links to Jobs tab → Calendar view, pre-focused on today
 - Bottom: link to Settings
 
 ### 15. Settings
@@ -199,11 +237,17 @@ Error state: if AI couldn't parse a field, show empty field with "⚠ couldn't f
 ## Shared components
 
 - **Sync status dot** — green / amber / red, top-right on every screen
-- **Job card** — used in Jobs list + Home today-section. Horizontal (home) and full-width (list) variants
+- **Job card** — used in Jobs list + Home today-section + Day View timeline. Three variants: horizontal (home), full-width (list), compact (timeline)
 - **Record button** — used in 3 places; consistent behavior
 - **Language badge** — pill showing "සිං" or "EN"
 - **Field card** — read-only card in Job Detail. Title small, value prominent, optional "filled from voice" footer
 - **Empty state** — illustration + one-line copy + one CTA. Used on every potentially-empty list
+- **Contribution grid** — one component, two variants:
+  - *Compact*: 12 weeks, used on Home
+  - *Full*: 52 weeks with month + weekday labels, year selector, legend, used on Profile
+  - Both share the same color ramp and tap-to-open-Day-View interaction
+- **Monthly calendar grid** — used in Jobs → Calendar view. 6-row × 7-col month grid with per-day job-count badge + intensity fill. Swipeable month-to-month
+- **Day stepper header** — used in Day View. Big date + ±1 day arrows, swipe-navigable
 
 ---
 

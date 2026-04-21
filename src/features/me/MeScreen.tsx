@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppBar, Btn, Icon, SectionLabel } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import { formatIdle } from '../../utils/idle';
+import { useTheme, type ThemeMode } from '../theme/ThemeProvider';
 import { useProfileData } from './useProfileData';
 
 interface MeScreenProps {
@@ -55,10 +56,13 @@ export function MeScreen({
   onOpenJobs,
   confirmSignOut = defaultConfirm,
 }: MeScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const data = useProfileData(repo ?? null);
+  const { mode, setMode } = useTheme();
 
   useFocusEffect(
     useCallback(() => {
@@ -163,6 +167,7 @@ export function MeScreen({
                   <StatTile
                     label="Total jobs"
                     value={String(data.stats.totalJobs)}
+                    styles={styles}
                   />
                   <StatTile
                     label="Avg idle"
@@ -171,6 +176,7 @@ export function MeScreen({
                         ? formatIdle(data.stats.avgIdleMinutes)
                         : '—'
                     }
+                    styles={styles}
                   />
                   <StatTile
                     label="Top machine"
@@ -182,6 +188,7 @@ export function MeScreen({
                           }`
                         : undefined
                     }
+                    styles={styles}
                   />
                   <StatTile
                     label="Top department"
@@ -193,6 +200,7 @@ export function MeScreen({
                           }`
                         : undefined
                     }
+                    styles={styles}
                   />
                 </View>
 
@@ -213,6 +221,13 @@ export function MeScreen({
             )}
           </>
         )}
+
+        <SectionLabel>Appearance</SectionLabel>
+        <View style={styles.segmentedWrap}>
+          <ThemeSegment label="System" active={mode === 'system'} onPress={() => setMode('system')} styles={styles} />
+          <ThemeSegment label="Light" active={mode === 'light'} onPress={() => setMode('light')} styles={styles} />
+          <ThemeSegment label="Dark" active={mode === 'dark'} onPress={() => setMode('dark')} styles={styles} />
+        </View>
 
         <SectionLabel>Account</SectionLabel>
         <View style={styles.actions}>
@@ -240,10 +255,12 @@ function StatTile({
   label,
   value,
   sub,
+  styles,
 }: {
   label: string;
   value: string;
   sub?: string;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   return (
     <View style={styles.statTile}>
@@ -256,155 +273,198 @@ function StatTile({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  scroll: {
-    paddingHorizontal: spacing.xl,
-    gap: spacing.sm,
-  },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.navy,
-  },
-  avatarText: {
-    fontFamily: fonts.sansBold,
-    fontSize: 22,
-    letterSpacing: -0.4,
-    color: '#fff',
-  },
-  profileText: { flex: 1, minWidth: 0, gap: 2 },
-  name: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 18,
-    letterSpacing: -0.4,
-    color: colors.text,
-  },
-  email: {
-    fontFamily: fonts.sans,
-    fontSize: 13,
-    color: colors.mute,
-  },
-  memberSince: {
-    fontFamily: fonts.sans,
-    fontSize: 11.5,
-    color: colors.mute,
-    marginTop: 2,
-  },
+function ThemeSegment({
+  label,
+  active,
+  onPress,
+  styles,
+}: {
+  label: string;
+  active: boolean;
+  onPress(): void;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.segment,
+        active && styles.segmentActive,
+        pressed && styles.pressed,
+      ]}
+      testID={`me-theme-${label.toLowerCase()}`}
+    >
+      <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]}>{label}</Text>
+    </Pressable>
+  );
+}
 
-  loadingCard: {
-    padding: spacing.lg,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.lineSoft,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-  },
-  errorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.red,
-    backgroundColor: colors.redSoft,
-  },
-  errorText: {
-    flex: 1,
-    fontFamily: fonts.sans,
-    fontSize: 13,
-    color: colors.red,
-  },
-  streakRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-  },
-  streakText: {
-    flex: 1,
-    fontFamily: fonts.sans,
-    fontSize: 12,
-    color: colors.muteDeep,
-  },
-  statGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  statTile: {
-    width: '48.5%',
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-    gap: 4,
-  },
-  statLabel: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 10.5,
-    color: colors.muteDeep,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
-  },
-  statValue: {
-    fontFamily: fonts.sansBold,
-    fontSize: 18,
-    letterSpacing: -0.4,
-    color: colors.text,
-  },
-  statSub: {
-    fontFamily: fonts.sans,
-    fontSize: 11.5,
-    color: colors.mute,
-  },
-  openCalendarBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
-    marginTop: spacing.xs,
-  },
-  pressed: { opacity: 0.85 },
-  openCalendarText: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 13,
-    color: colors.navy,
-    letterSpacing: 0.3,
-  },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    scroll: { paddingHorizontal: spacing.xl, gap: spacing.sm },
+    profileCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.lg,
+      padding: spacing.lg,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.surface,
+      marginBottom: spacing.sm,
+    },
+    avatar: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.navy,
+    },
+    avatarText: {
+      fontFamily: fonts.sansBold,
+      fontSize: 22,
+      letterSpacing: -0.4,
+      color: '#fff',
+    },
+    profileText: { flex: 1, minWidth: 0, gap: 2 },
+    name: {
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 18,
+      letterSpacing: -0.4,
+      color: colors.text,
+    },
+    email: {
+      fontFamily: fonts.sans,
+      fontSize: 13,
+      color: colors.mute,
+    },
+    memberSince: {
+      fontFamily: fonts.sans,
+      fontSize: 11.5,
+      color: colors.mute,
+      marginTop: 2,
+    },
+    loadingCard: {
+      padding: spacing.lg,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.lineSoft,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+    },
+    errorCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.red,
+      backgroundColor: colors.redSoft,
+    },
+    errorText: {
+      flex: 1,
+      fontFamily: fonts.sans,
+      fontSize: 13,
+      color: colors.red,
+    },
+    streakRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+    },
+    streakText: {
+      flex: 1,
+      fontFamily: fonts.sans,
+      fontSize: 12,
+      color: colors.muteDeep,
+    },
+    statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    statTile: {
+      width: '48.5%',
+      padding: spacing.md,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.surface,
+      gap: 4,
+    },
+    statLabel: {
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 10.5,
+      color: colors.muteDeep,
+      letterSpacing: 1.1,
+      textTransform: 'uppercase',
+    },
+    statValue: {
+      fontFamily: fonts.sansBold,
+      fontSize: 18,
+      letterSpacing: -0.4,
+      color: colors.text,
+    },
+    statSub: {
+      fontFamily: fonts.sans,
+      fontSize: 11.5,
+      color: colors.mute,
+    },
+    openCalendarBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.surface,
+      marginTop: spacing.xs,
+    },
+    pressed: { opacity: 0.85 },
+    openCalendarText: {
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 13,
+      color: colors.navy,
+      letterSpacing: 0.3,
+    },
 
-  actions: { gap: spacing.md },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingTop: spacing.sm,
-  },
-  metaText: {
-    fontFamily: fonts.sans,
-    fontSize: 11.5,
-    color: colors.mute,
-  },
-});
+    segmentedWrap: {
+      flexDirection: 'row',
+      gap: 0,
+      padding: 3,
+      borderRadius: radii.pill,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.surface,
+      alignSelf: 'flex-start',
+    },
+    segment: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: 7,
+      borderRadius: radii.pill,
+    },
+    segmentActive: { backgroundColor: colors.navy },
+    segmentLabel: {
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 12,
+      color: colors.navy,
+      letterSpacing: 0.3,
+    },
+    segmentLabelActive: { color: '#fff' },
+
+    actions: { gap: spacing.md },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingTop: spacing.sm,
+    },
+    metaText: {
+      fontFamily: fonts.sans,
+      fontSize: 11.5,
+      color: colors.mute,
+    },
+  });

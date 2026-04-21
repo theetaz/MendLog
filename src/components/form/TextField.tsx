@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 
 interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   label: string;
@@ -9,6 +10,8 @@ interface TextFieldProps extends Omit<TextInputProps, 'style'> {
 }
 
 export function TextField({ label, required, error, hint, ...rest }: TextFieldProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       <Text style={styles.label}>
@@ -29,7 +32,7 @@ export function TextField({ label, required, error, hint, ...rest }: TextFieldPr
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: 6 },
   label: {
     fontFamily: fonts.sansSemiBold,

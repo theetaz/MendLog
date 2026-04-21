@@ -17,7 +17,7 @@ export const defaultRequester: PermissionRequester = async (key) => {
     return res.granted ? 'granted' : 'denied';
   }
   if (key === 'photos') {
-    const res = await MediaLibrary.requestPermissionsAsync(false);
+    const res = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
     return res.granted ? 'granted' : 'denied';
   }
   return 'denied';

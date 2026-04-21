@@ -22,6 +22,7 @@ export const SEED_JOBS: Job[] = [
     desc: 'Machine stopped mid-cycle, loud hiss from rear hydraulic unit, no movement on mold close.',
     action: 'Drained hydraulic reservoir, replaced main cylinder seal kit (part HC-0831), refilled with ISO 46 fluid. Ran 5 dry cycles.',
     remarks: '',
+    completedAt: null,
   },
   {
     id: 126,
@@ -39,6 +40,7 @@ export const SEED_JOBS: Job[] = [
     desc: 'Coolant flow erratic, spindle temperature warning.',
     action: 'Replaced impeller assembly, flushed coolant lines.',
     remarks: 'Pump housing shows early corrosion — flag for monthly check.',
+    completedAt: null,
   },
   {
     id: 125,
@@ -56,6 +58,7 @@ export const SEED_JOBS: Job[] = [
     desc: 'Abnormal squealing, belt tracking off by ~20mm.',
     action: 'Re-tensioned, aligned tail pulley, replaced bearing (PN 6205-2RS).',
     remarks: '',
+    completedAt: null,
   },
   {
     id: 124,
@@ -73,6 +76,7 @@ export const SEED_JOBS: Job[] = [
     desc: 'Press would not retract after cycle.',
     action: 'Swapped control relay K4, tested 20 cycles.',
     remarks: '',
+    completedAt: null,
   },
   {
     id: 123,
@@ -90,6 +94,7 @@ export const SEED_JOBS: Job[] = [
     desc: 'Random stops every 3-4 minutes.',
     action: 'Cleaned photo-eye sensor, re-calibrated.',
     remarks: '',
+    completedAt: null,
   },
   {
     id: 122,
@@ -107,6 +112,7 @@ export const SEED_JOBS: Job[] = [
     desc: 'Oil pooling under machine, heat warning.',
     action: 'Replaced pump gasket and heat shield.',
     remarks: 'Recommend replacing pump entirely within 90 days.',
+    completedAt: null,
   },
   {
     id: 121,
@@ -124,5 +130,6 @@ export const SEED_JOBS: Job[] = [
     desc: 'Pressure climbing past limit, safety trip.',
     action: 'Cleaned valve seat, tested at 8 bar.',
     remarks: '',
+    completedAt: null,
   },
 ];

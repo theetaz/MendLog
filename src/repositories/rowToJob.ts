@@ -8,6 +8,7 @@ export interface JobRow {
   inv: string | null;
   date: string;
   reported_time: string;
+  completed_at: string | null;
   idle_minutes: number;
   status: JobStatus;
   lang: Lang;
@@ -29,6 +30,7 @@ export function rowToJob(row: JobRow): Job {
     inv: row.inv ?? '',
     date: row.date,
     time: row.reported_time.slice(0, 5),
+    completedAt: row.completed_at,
     idleMinutes: row.idle_minutes,
     status: row.status,
     lang: row.lang,

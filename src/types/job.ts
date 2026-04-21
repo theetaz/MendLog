@@ -9,6 +9,7 @@ export interface Job {
   inv: string;
   date: string;
   time: string;
+  completedAt: string | null;
   idleMinutes: number;
   status: JobStatus;
   lang: Lang;

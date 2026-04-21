@@ -8,6 +8,7 @@ const ROW: JobRow = {
   inv: 'INV-0331',
   date: '2026-03-15',
   reported_time: '09:14:00',
+  completed_at: null,
   idle_minutes: 260,
   status: 'awaiting-tl',
   lang: 'si',

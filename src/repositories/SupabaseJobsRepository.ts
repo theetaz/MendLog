@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActivityDay, Job } from '../types/job';
-import type { JobsRepository } from './JobsRepository';
+import type { JobsPage, JobsRepository } from './JobsRepository';
 import { rowToJob, type JobRow } from './rowToJob';
 
 interface ActivityRow {
@@ -28,6 +28,26 @@ export class SupabaseJobsRepository implements JobsRepository {
     if (error) throw error;
     const rows = (data ?? []) as JobRow[];
     return rows.map(rowToJob);
+  }
+
+  async listJobsForDate(
+    dateIso: string,
+    opts: { limit?: number; offset?: number } = {},
+  ): Promise<JobsPage> {
+    const limit = Math.max(1, opts.limit ?? 20);
+    const offset = Math.max(0, opts.offset ?? 0);
+    // Fetch one extra to detect hasMore without a separate count query
+    const { data, error } = await this.client
+      .from('jobs')
+      .select('*')
+      .eq('date', dateIso)
+      .order('reported_time', { ascending: true })
+      .range(offset, offset + limit);
+    if (error) throw error;
+    const rows = (data ?? []) as JobRow[];
+    const hasMore = rows.length > limit;
+    const slice = hasMore ? rows.slice(0, limit) : rows;
+    return { jobs: slice.map(rowToJob), hasMore };
   }
 
   async getJob(id: number): Promise<Job | null> {

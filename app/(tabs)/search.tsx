@@ -1,10 +1,7 @@
-import { ComingSoon } from '../../src/features/placeholder/ComingSoon';
+import { useRouter } from 'expo-router';
+import { SearchScreen } from '../../src/features/search/SearchScreen';
 
 export default function SearchRoute() {
-  return (
-    <ComingSoon
-      title="Search"
-      blurb="Semantic search across past jobs — by text, photo, or error code."
-    />
-  );
+  const router = useRouter();
+  return <SearchScreen onOpenJob={(id) => router.push(`/jobs/${id}` as never)} />;
 }

@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../tokens';
 import { Icon, type IconName } from './Icon';
 
@@ -25,8 +26,9 @@ const ITEMS: TabItem[] = [
 ];
 
 export function TabBar({ active, onTab }: TabBarProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) + 8 }]}>
       {ITEMS.map((item) => {
         if (item.fab) {
           return (
@@ -68,7 +70,6 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 14,
     paddingTop: 8,
-    paddingBottom: 10,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.line,

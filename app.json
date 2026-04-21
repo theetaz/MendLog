@@ -9,17 +9,39 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "MendLog records your voice memos describing each repair so it can transcribe them into job reports.",
+        "NSCameraUsageDescription": "MendLog uses the camera to attach photos of faults and parts to each repair job.",
+        "NSPhotoLibraryUsageDescription": "MendLog saves repair photos so you can review them later.",
+        "NSPhotoLibraryAddUsageDescription": "MendLog saves repair photos to your library for record keeping."
+      },
+      "bundleIdentifier": "com.theetaz.mendlog"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0E0E0E",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "RECORD_AUDIO",
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ],
+      "package": "com.theetaz.mendlog"
     },
     "web": {
       "output": "static",
@@ -33,12 +55,33 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#0E0E0E",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#0E0E0E"
           }
         }
-      ]
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MendLog uses the camera to attach photos of faults and parts to each repair job."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "MendLog records your voice memos describing each repair so it can transcribe them into job reports."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "MendLog saves repair photos so you can review them later.",
+          "savePhotosPermission": "MendLog saves repair photos to your library for record keeping.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

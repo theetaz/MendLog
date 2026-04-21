@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts } from '../tokens';
 import { SyncDot, type SyncState } from './SyncDot';
 
@@ -8,11 +9,22 @@ interface AppBarProps {
   left?: React.ReactNode;
   right?: React.ReactNode;
   sync?: SyncState;
+  /** Disable automatic top safe-area padding (e.g. inside a modal with its own header). */
+  disableTopInset?: boolean;
 }
 
-export function AppBar({ title, subtitle, left, right, sync = 'synced' }: AppBarProps) {
+export function AppBar({
+  title,
+  subtitle,
+  left,
+  right,
+  sync = 'synced',
+  disableTopInset = false,
+}: AppBarProps) {
+  const insets = useSafeAreaInsets();
+  const topPad = disableTopInset ? 10 : insets.top + 10;
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingTop: topPad }]}>
       {left}
       <View style={styles.stack}>
         {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -29,7 +41,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 18,
-    paddingVertical: 10,
+    paddingBottom: 10,
     backgroundColor: colors.bg,
   },
   stack: {

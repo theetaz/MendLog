@@ -1,17 +1,19 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Factory — creates a Supabase client.
  * Exported for tests and for advanced cases (multiple clients).
  * Normal callers should use `getSupabaseClient()`.
- *
- * TODO(auth): pass `storage: AsyncStorage` once we install
- * `@react-native-async-storage/async-storage` during the sign-in slice.
- * Until then sessions won't persist across app restarts.
  */
-export function makeSupabaseClient(url: string, anonKey: string): SupabaseClient {
+export function makeSupabaseClient(
+  url: string,
+  anonKey: string,
+  storage: typeof AsyncStorage = AsyncStorage,
+): SupabaseClient {
   return createClient(url, anonKey, {
     auth: {
+      storage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

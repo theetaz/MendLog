@@ -1,4 +1,5 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppBar } from '../../design/components/AppBar';
 import { SectionLabel } from '../../design/components/SectionLabel';
 import { colors, fonts, radii, spacing } from '../../design/tokens';
@@ -23,6 +24,7 @@ export function HomeScreen({
   onOpenDay,
 }: HomeScreenProps) {
   const data = useHomeData(repo, clock);
+  const insets = useSafeAreaInsets();
 
   if (data.loading) {
     return (
@@ -33,7 +35,11 @@ export function HomeScreen({
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 120 }]}
+      showsVerticalScrollIndicator={false}
+    >
       <AppBar title={`Hello, ${userName}`} />
 
       {data.error && (
@@ -97,7 +103,7 @@ function Stat({ label, value, suffix }: { label: string; value: string; suffix?:
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingBottom: 120 },
+  content: {},
   loading: {
     flex: 1,
     alignItems: 'center',

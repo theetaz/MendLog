@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SearchSelect, type SelectOption } from '../../components/form';
 import { Btn, Icon } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobStatus } from '../../types/job';
 import { useCatalog } from '../catalog/useCatalog';
 import { STATUS_OPTIONS } from '../jobs/statusOptions';
@@ -48,6 +48,8 @@ export function SearchFiltersModal({
   onApply,
   onClose,
 }: SearchFiltersModalProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const catalog = useCatalog();
   const [filters, setFilters] = useState<SearchFilters>(initial);
@@ -226,7 +228,7 @@ export function SearchFiltersModal({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: {
     flexDirection: 'row',

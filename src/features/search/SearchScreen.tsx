@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobCard } from '../../components/JobCard';
 import { AppBar, Icon, SectionLabel } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import {
   activeFilterCount,
   EMPTY_FILTERS,
@@ -31,6 +31,8 @@ interface SearchScreenProps {
 const DEBOUNCE_MS = 280;
 
 export function SearchScreen({ onOpenJob }: SearchScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -168,21 +170,25 @@ export function SearchScreen({ onOpenJob }: SearchScreenProps) {
       {filterCount > 0 && (
         <View style={styles.activePillsRow}>
           {filters.dept && (
-            <ActivePill label={`Dept: ${filters.dept}`} onRemove={() => removeFilter('dept')} />
+            <ActivePill label={`Dept: ${filters.dept}`} onRemove={() => removeFilter('dept')} styles={styles} colors={colors} />
           )}
           {filters.machine && (
-            <ActivePill label={`Machine: ${filters.machine}`} onRemove={() => removeFilter('machine')} />
+            <ActivePill label={`Machine: ${filters.machine}`} onRemove={() => removeFilter('machine')} styles={styles} colors={colors} />
           )}
           {filters.status && (
             <ActivePill
               label={`Status: ${STATUS_OPTIONS.find((o) => o.id === filters.status)?.label ?? filters.status}`}
               onRemove={() => removeFilter('status')}
+              styles={styles}
+              colors={colors}
             />
           )}
           {(filters.dateFrom || filters.dateTo) && (
             <ActivePill
               label={`${filters.dateFrom ?? '…'} → ${filters.dateTo ?? '…'}`}
               onRemove={() => removeFilter('dateFrom')}
+              styles={styles}
+              colors={colors}
             />
           )}
         </View>
@@ -196,7 +202,7 @@ export function SearchScreen({ onOpenJob }: SearchScreenProps) {
       )}
 
       {!hasAnyInput ? (
-        <EmptyState recents={recents} onTap={handleRecentPress} onClear={clear} />
+        <EmptyState recents={recents} onTap={handleRecentPress} onClear={clear} styles={styles} />
       ) : (
         <FlatList
           data={hits}
@@ -242,7 +248,7 @@ export function SearchScreen({ onOpenJob }: SearchScreenProps) {
               {item.snippet && (
                 <View style={styles.snippetCard}>
                   <Text style={styles.snippetField}>{item.matchedField}</Text>
-                  <HighlightedText text={item.snippet} query={lastQuery} />
+                  <HighlightedText text={item.snippet} query={lastQuery} styles={styles} />
                 </View>
               )}
             </View>
@@ -261,7 +267,17 @@ export function SearchScreen({ onOpenJob }: SearchScreenProps) {
   );
 }
 
-function ActivePill({ label, onRemove }: { label: string; onRemove(): void }) {
+function ActivePill({
+  label,
+  onRemove,
+  styles,
+  colors,
+}: {
+  label: string;
+  onRemove(): void;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
+}) {
   return (
     <Pressable
       onPress={onRemove}
@@ -277,11 +293,14 @@ function EmptyState({
   recents,
   onTap,
   onClear,
+  styles,
 }: {
   recents: string[];
   onTap(q: string): void;
   onClear(): void;
+  styles: ReturnType<typeof makeStyles>;
 }) {
+  const colors = useColors();
   if (recents.length === 0) {
     return (
       <View style={styles.emptyWelcome}>
@@ -296,7 +315,7 @@ function EmptyState({
   }
   return (
     <View style={styles.recentsWrap}>
-      <SectionLabel right={<ClearRecents onPress={onClear} />}>Recent searches</SectionLabel>
+      <SectionLabel right={<ClearRecents onPress={onClear} styles={styles} />}>Recent searches</SectionLabel>
       <View style={styles.recentsList}>
         {recents.map((r) => (
           <Pressable
@@ -313,7 +332,7 @@ function EmptyState({
   );
 }
 
-function ClearRecents({ onPress }: { onPress(): void }) {
+function ClearRecents({ onPress, styles }: { onPress(): void; styles: ReturnType<typeof makeStyles> }) {
   return (
     <Pressable onPress={onPress} hitSlop={6}>
       <Text style={styles.clearLink}>Clear</Text>
@@ -321,7 +340,7 @@ function ClearRecents({ onPress }: { onPress(): void }) {
   );
 }
 
-function HighlightedText({ text, query }: { text: string; query: string }) {
+function HighlightedText({ text, query, styles }: { text: string; query: string; styles: ReturnType<typeof makeStyles> }) {
   const q = query.trim();
   if (!q) return <Text style={styles.snippetText}>{text}</Text>;
   const parts: Array<{ text: string; match: boolean }> = [];
@@ -353,7 +372,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   searchRow: {
     flexDirection: 'row',

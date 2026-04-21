@@ -6,7 +6,7 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from 'expo-audio';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import { Icon } from '../../design/components/Icon';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import { transcribeAudioOnce } from '../../features/jobs/clipsApi';
 
 // Whisper-optimal + emulator-friendly
@@ -57,6 +57,8 @@ export function VoiceTextArea({
   error,
   minHeight = 96,
 }: VoiceTextAreaProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const recorder = useAudioRecorder(RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(recorder, 500);
   const [stage, setStage] = useState<Stage>('idle');
@@ -163,7 +165,7 @@ export function VoiceTextArea({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: 6 },
   labelRow: {
     flexDirection: 'row',

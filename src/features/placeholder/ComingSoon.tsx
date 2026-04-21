@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppBar } from '../../design/components/AppBar';
-import { colors, fonts, spacing } from '../../design/tokens';
+import { fonts, spacing, type ThemeColors, useColors } from '../../design/tokens';
 
 interface ComingSoonProps {
   title: string;
@@ -8,6 +9,8 @@ interface ComingSoonProps {
 }
 
 export function ComingSoon({ title, blurb }: ComingSoonProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       <AppBar title={title} />
@@ -19,27 +22,28 @@ export function ComingSoon({ title, blurb }: ComingSoonProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  body: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  label: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 12,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: colors.muteDeep,
-    marginBottom: spacing.sm,
-  },
-  blurb: {
-    fontFamily: fonts.sans,
-    fontSize: 14,
-    color: colors.mute,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bg },
+    body: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.xl,
+    },
+    label: {
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 12,
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: colors.muteDeep,
+      marginBottom: spacing.sm,
+    },
+    blurb: {
+      fontFamily: fonts.sans,
+      fontSize: 14,
+      color: colors.mute,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+  });

@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { useMemo } from 'react';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 
 export type TimeUnit = 'minutes' | 'hours';
 
@@ -20,6 +21,8 @@ export function NumberWithUnit({
   required,
   error,
 }: NumberWithUnitProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const handleText = (text: string) => {
     const cleaned = text.replace(/[^0-9.]/g, '');
     const num = cleaned === '' ? 0 : Number(cleaned);
@@ -46,11 +49,13 @@ export function NumberWithUnit({
             label="min"
             active={unit === 'minutes'}
             onPress={() => onChange({ value, unit: 'minutes' })}
+            styles={styles}
           />
           <UnitBtn
             label="hr"
             active={unit === 'hours'}
             onPress={() => onChange({ value, unit: 'hours' })}
+            styles={styles}
           />
         </View>
       </View>
@@ -63,10 +68,12 @@ function UnitBtn({
   label,
   active,
   onPress,
+  styles,
 }: {
   label: string;
   active: boolean;
   onPress(): void;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   return (
     <Pressable
@@ -86,7 +93,7 @@ export function toMinutes(value: number, unit: TimeUnit): number {
   return Math.round(unit === 'hours' ? value * 60 : value);
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: 6 },
   label: {
     fontFamily: fonts.sansSemiBold,

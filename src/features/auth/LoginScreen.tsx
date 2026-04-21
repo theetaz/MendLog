@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Btn, Icon } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 
 interface LoginScreenProps {
   onSubmit(email: string, password: string): Promise<{ error?: string }>;
@@ -23,6 +23,8 @@ function isValidEmail(value: string) {
 }
 
 export function LoginScreen({ onSubmit, testID }: LoginScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -79,7 +81,7 @@ export function LoginScreen({ onSubmit, testID }: LoginScreenProps) {
               </View>
             ) : null}
 
-            <Field label="Email">
+            <Field label="Email" styles={styles}>
               <TextInput
                 testID="login-email"
                 value={email}
@@ -97,7 +99,7 @@ export function LoginScreen({ onSubmit, testID }: LoginScreenProps) {
               />
             </Field>
 
-            <Field label="Password">
+            <Field label="Password" styles={styles}>
               <View style={styles.passwordRow}>
                 <TextInput
                   ref={passwordRef}
@@ -150,7 +152,15 @@ export function LoginScreen({ onSubmit, testID }: LoginScreenProps) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  styles,
+}: {
+  label: string;
+  children: React.ReactNode;
+  styles: ReturnType<typeof makeStyles>;
+}) {
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -159,7 +169,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   scroll: {

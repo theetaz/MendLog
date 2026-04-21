@@ -1,7 +1,8 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../../design/components/Icon';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { useMemo } from 'react';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 
 export interface StagedPhoto {
   uri: string;
@@ -18,6 +19,8 @@ interface PhotoGridProps {
 }
 
 export function PhotoGrid({ label, photos, onChange, max = 10 }: PhotoGridProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const atMax = photos.length >= max;
 
   const pickFrom = async (source: 'camera' | 'library') => {
@@ -114,7 +117,7 @@ export function PhotoGrid({ label, photos, onChange, max = 10 }: PhotoGridProps)
 
 const TILE_SIZE = 92;
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: 8 },
   labelRow: {
     flexDirection: 'row',

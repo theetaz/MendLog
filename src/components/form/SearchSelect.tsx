@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '../../design/components/Icon';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 
 export interface SelectOption {
   id: number | string;
@@ -46,6 +46,8 @@ export function SearchSelect({
   emptyMessage = 'No matches',
   error,
 }: SearchSelectProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const insets = useSafeAreaInsets();
@@ -172,7 +174,7 @@ export function SearchSelect({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: 6 },
   label: {
     fontFamily: fonts.sansSemiBold,

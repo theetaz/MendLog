@@ -1,7 +1,7 @@
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 
 interface DateTimeFieldProps {
   label: string;
@@ -17,6 +17,8 @@ interface DateTimeFieldProps {
 type Mode = 'date' | 'time';
 
 export function DateTimeField(props: DateTimeFieldProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
@@ -27,14 +29,25 @@ export function DateTimeField(props: DateTimeFieldProps) {
         {props.optional && !props.required && <Text style={styles.optional}>Optional</Text>}
       </View>
 
-      {Platform.OS === 'ios' ? <IosCompact {...props} /> : <AndroidButtons {...props} />}
+      {Platform.OS === 'ios' ? (
+        <IosCompact {...props} styles={styles} colors={colors} />
+      ) : (
+        <AndroidButtons {...props} styles={styles} colors={colors} />
+      )}
 
       {props.error && <Text style={styles.errorText}>{props.error}</Text>}
     </View>
   );
 }
 
-function IosCompact({ value, onChange, minimumDate, maximumDate, required }: DateTimeFieldProps) {
+function IosCompact({
+  value,
+  onChange,
+  minimumDate,
+  maximumDate,
+  required,
+  styles,
+}: DateTimeFieldProps & { styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   // iOS compact pickers are native small buttons that open their own popovers.
   // Keep two pickers (date + time) and render them side by side.
   const safeValue = value ?? new Date();
@@ -83,7 +96,8 @@ function AndroidButtons({
   required,
   minimumDate,
   maximumDate,
-}: DateTimeFieldProps) {
+  styles,
+}: DateTimeFieldProps & { styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   const [openMode, setOpenMode] = useState<Mode | null>(null);
 
   const handleChange = (_: DateTimePickerEvent, next?: Date) => {
@@ -153,7 +167,7 @@ function formatTime(d: Date): string {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: 6 },
   labelRow: {
     flexDirection: 'row',

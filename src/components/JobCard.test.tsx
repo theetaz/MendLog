@@ -10,6 +10,7 @@ const FIXTURE: Job = {
   inv: 'INV-0331',
   date: '2026-03-15',
   time: '09:14',
+  completedAt: null,
   idleMinutes: 260,
   status: 'awaiting-tl',
   lang: 'si',
@@ -53,15 +54,17 @@ describe('JobCard (full variant)', () => {
 });
 
 describe('JobCard (horizontal variant)', () => {
-  it('renders time badge with job time', () => {
+  it('renders a date pill with month and day', () => {
     render(<JobCard job={FIXTURE} variant="horizontal" />);
-    expect(screen.getByText('09:14')).toBeTruthy();
+    expect(screen.getByText('Mar')).toBeTruthy();
+    expect(screen.getByText('15')).toBeTruthy();
   });
 
-  it('renders machine name and dept · idle summary', () => {
+  it('renders machine, dept, time and idle summary', () => {
     render(<JobCard job={FIXTURE} variant="horizontal" />);
     expect(screen.getByText('Injection Molder #3')).toBeTruthy();
     expect(screen.getByText(/Moulding/)).toBeTruthy();
+    expect(screen.getByText(/09:14/)).toBeTruthy();
     expect(screen.getByText(/4h 20m idle/)).toBeTruthy();
   });
 });

@@ -17,6 +17,18 @@ interface JobCardProps {
   testID?: string;
 }
 
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function splitDate(iso: string): { month: string; day: string } {
+  const parts = iso.split('-').map(Number);
+  const monthIdx = (parts[1] ?? 1) - 1;
+  const day = String(parts[2] ?? 1);
+  return {
+    month: MONTH_SHORT[monthIdx] ?? '',
+    day,
+  };
+}
+
 export function JobCard({ job, variant = 'full', onPress, testID }: JobCardProps) {
   const tone = statusTone(job.status);
   const idle = formatIdle(job.idleMinutes);
@@ -45,17 +57,19 @@ export function JobCard({ job, variant = 'full', onPress, testID }: JobCardProps
   }
 
   if (variant === 'horizontal') {
+    const { month, day } = splitDate(job.date);
     return (
       <Pressable testID={testID} onPress={onPress} style={styles.horizontalCard}>
-        <View style={styles.timePill}>
-          <Text style={styles.timeText}>{job.time}</Text>
+        <View style={styles.datePill}>
+          <Text style={styles.datePillMonth}>{month}</Text>
+          <Text style={styles.datePillDay}>{day}</Text>
         </View>
         <View style={styles.horizontalBody}>
           <Text style={styles.horizontalMachine} numberOfLines={1}>
             {job.machine}
           </Text>
           <Text style={styles.horizontalMeta}>
-            {job.dept} · {idle} idle
+            {job.dept} · {job.time} · {idle} idle
           </Text>
         </View>
         <Pill bg={tone.bg} color={tone.fg}>
@@ -146,18 +160,28 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     backgroundColor: colors.surface,
   },
-  timePill: {
+  datePill: {
     width: 46,
-    height: 46,
+    minHeight: 46,
+    paddingVertical: 6,
     borderRadius: 10,
     backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timeText: {
+  datePillMonth: {
     color: '#fff',
     fontFamily: fonts.sansSemiBold,
-    fontSize: 12.5,
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  datePillDay: {
+    color: '#fff',
+    fontFamily: fonts.sansBold,
+    fontSize: 16,
+    letterSpacing: -0.4,
+    marginTop: 1,
   },
   horizontalBody: { flex: 1, minWidth: 0 },
   horizontalMachine: {

@@ -32,7 +32,7 @@ import {
   toMinutes,
 } from '../../components/form';
 import { AppBar, Btn, Icon, SectionLabel } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import { useCatalog } from '../catalog/useCatalog';
 import {
   type ClipRow,
@@ -109,6 +109,8 @@ const emptyForm = (): FormState => ({
 });
 
 export function NewJobScreen({ userId, onClose, onSaved }: NewJobScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const catalog = useCatalog();
 
@@ -422,6 +424,8 @@ export function NewJobScreen({ userId, onClose, onSaved }: NewJobScreenProps) {
             onStart={startNote}
             onStop={stopNote}
             onReset={resetNote}
+            styles={styles}
+            colors={colors}
           />
 
           {saveError && (
@@ -465,7 +469,9 @@ function VoiceNoteCompact({
   onStart,
   onStop,
   onReset,
-}: VoiceNoteCompactProps) {
+  styles,
+  colors,
+}: VoiceNoteCompactProps & { styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   const duration = formatDuration(
     stage === 'recording' ? elapsedMs : clip?.duration_ms ?? elapsedMs,
   );
@@ -548,7 +554,7 @@ function formatDuration(ms: number): string {
   return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   scroll: {

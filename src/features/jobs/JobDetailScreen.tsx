@@ -1,7 +1,7 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppBar, Btn, Icon, LangBadge, Pill, SectionLabel } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import { formatIdle } from '../../utils/idle';
 import { statusTone } from '../../components/jobStatus';
 import type { ClipWithUrl, JobDetail, PhotoWithUrl } from './jobsApi';
@@ -27,6 +27,8 @@ interface JobDetailScreenProps {
 }
 
 export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,12 +104,12 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
             />
           }
         >
-          <JobHeader detail={detail} />
+          <JobHeader detail={detail} styles={styles} />
 
           {detail.photos.length > 0 && (
             <>
               <SectionLabel>{`Photos · ${detail.photos.length}`}</SectionLabel>
-              <PhotoCarousel photos={detail.photos} />
+              <PhotoCarousel photos={detail.photos} styles={styles} colors={colors} />
             </>
           )}
 
@@ -116,7 +118,7 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
               <SectionLabel>{`Voice clips · ${detail.clips.length}`}</SectionLabel>
               <View style={styles.clipsList}>
                 {detail.clips.map((clip) => (
-                  <ClipRow key={clip.id} clip={clip} />
+                  <ClipRow key={clip.id} clip={clip} styles={styles} colors={colors} />
                 ))}
               </View>
             </>
@@ -135,13 +137,14 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
               },
               { label: 'Idle time', value: formatIdle(detail.job.idleMinutes) },
             ]}
+            styles={styles}
           />
 
           <SectionLabel>Failure & fix</SectionLabel>
-          <LongField label="Description of failure" value={detail.job.desc} />
-          <LongField label="Root cause" value={detail.job.rootCause} />
-          <LongField label="Corrective action" value={detail.job.action} />
-          <LongField label="Remarks" value={detail.job.remarks} />
+          <LongField label="Description of failure" value={detail.job.desc} styles={styles} />
+          <LongField label="Root cause" value={detail.job.rootCause} styles={styles} />
+          <LongField label="Corrective action" value={detail.job.action} styles={styles} />
+          <LongField label="Remarks" value={detail.job.remarks} styles={styles} />
 
           {onEdit && (
             <Btn
@@ -160,7 +163,7 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
   );
 }
 
-function JobHeader({ detail }: { detail: JobDetail }) {
+function JobHeader({ detail, styles }: { detail: JobDetail; styles: ReturnType<typeof makeStyles> }) {
   const tone = statusTone(detail.job.status);
   return (
     <View style={styles.headerBlock}>
@@ -180,7 +183,7 @@ function JobHeader({ detail }: { detail: JobDetail }) {
   );
 }
 
-function PhotoCarousel({ photos }: { photos: PhotoWithUrl[] }) {
+function PhotoCarousel({ photos, styles, colors }: { photos: PhotoWithUrl[]; styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   return (
     <ScrollView
       horizontal
@@ -222,7 +225,7 @@ function PhotoCarousel({ photos }: { photos: PhotoWithUrl[] }) {
   );
 }
 
-function ClipRow({ clip }: { clip: ClipWithUrl }) {
+function ClipRow({ clip, styles, colors }: { clip: ClipWithUrl; styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   const player = useAudioPlayer(clip.signed_url ?? undefined, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
   const [mode, setMode] = useState<'native' | 'english'>('english');
@@ -291,7 +294,7 @@ function ClipRow({ clip }: { clip: ClipWithUrl }) {
   );
 }
 
-function FieldGroup({ fields }: { fields: { label: string; value: string }[] }) {
+function FieldGroup({ fields, styles }: { fields: { label: string; value: string }[]; styles: ReturnType<typeof makeStyles> }) {
   return (
     <View style={styles.fieldGroup}>
       {fields.map((f, i) => (
@@ -307,7 +310,7 @@ function FieldGroup({ fields }: { fields: { label: string; value: string }[] }) 
   );
 }
 
-function LongField({ label, value }: { label: string; value: string }) {
+function LongField({ label, value, styles }: { label: string; value: string; styles: ReturnType<typeof makeStyles> }) {
   return (
     <View style={styles.longFieldCard}>
       <Text style={styles.longFieldLabel}>{label}</Text>
@@ -350,7 +353,7 @@ function trackProgress(current: number, total: number | null | undefined): numbe
 
 const PHOTO_SIZE = Math.min(Dimensions.get('window').width - spacing.xl * 2, 280);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scroll: {
     paddingHorizontal: spacing.xl,

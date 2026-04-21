@@ -26,7 +26,7 @@ import {
   toMinutes,
 } from '../../components/form';
 import { AppBar, Btn, Icon, SectionLabel } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { Job, JobStatus } from '../../types/job';
 import { STATUS_OPTIONS, statusOption } from './statusOptions';
 import { useCatalog } from '../catalog/useCatalog';
@@ -111,6 +111,8 @@ export function JobEditScreen({
   onSaved,
   onDeleted,
 }: JobEditScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const catalog = useCatalog();
 
@@ -325,14 +327,17 @@ export function JobEditScreen({
   }, [onClose]);
 
   if (loading || catalog.loading) {
-    return (
-      <LoadingShell jobId={jobId} onClose={onClose} />
-    );
+    return <LoadingShell jobId={jobId} onClose={onClose} styles={styles} colors={colors} />;
   }
 
   if (loadError || !form) {
     return (
-      <ErrorShell message={loadError ?? 'Could not load job'} onClose={onClose} />
+      <ErrorShell
+        message={loadError ?? 'Could not load job'}
+        onClose={onClose}
+        styles={styles}
+        colors={colors}
+      />
     );
   }
 
@@ -477,6 +482,7 @@ export function JobEditScreen({
             photos={existingPhotos}
             removed={removedPhotoIds}
             onToggleRemove={togglePhotoRemoval}
+            styles={styles}
           />
           <PhotoGrid
             label="Add new photos"
@@ -490,6 +496,8 @@ export function JobEditScreen({
             clips={existingClips}
             removed={removedClipIds}
             onToggleRemove={toggleClipRemoval}
+            styles={styles}
+            colors={colors}
           />
           {newClips.length > 0 && (
             <View style={styles.newClipsList}>
@@ -503,7 +511,7 @@ export function JobEditScreen({
               ))}
             </View>
           )}
-          <VoiceNoteAddPill voice={voice} />
+          <VoiceNoteAddPill voice={voice} styles={styles} colors={colors} />
 
           {saveError && (
             <View style={styles.errorCard}>
@@ -544,7 +552,7 @@ export function JobEditScreen({
   );
 }
 
-function LoadingShell({ jobId, onClose }: { jobId: number; onClose(): void }) {
+function LoadingShell({ jobId, onClose, styles, colors }: { jobId: number; onClose(): void; styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   return (
     <View style={styles.container}>
       <AppBar
@@ -562,7 +570,7 @@ function LoadingShell({ jobId, onClose }: { jobId: number; onClose(): void }) {
   );
 }
 
-function ErrorShell({ message, onClose }: { message: string; onClose(): void }) {
+function ErrorShell({ message, onClose, styles, colors }: { message: string; onClose(): void; styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   return (
     <View style={styles.container}>
       <AppBar
@@ -585,11 +593,14 @@ function ExistingPhotosEditor({
   photos,
   removed,
   onToggleRemove,
+  styles,
 }: {
   photos: PhotoWithUrl[];
   removed: Set<number>;
   onToggleRemove(id: number): void;
+  styles: ReturnType<typeof makeStyles>;
 }) {
+  const colors = useColors();
   if (photos.length === 0) {
     return (
       <View style={styles.emptyMediaCard}>
@@ -644,10 +655,14 @@ function ExistingClipsEditor({
   clips,
   removed,
   onToggleRemove,
+  styles,
+  colors,
 }: {
   clips: ClipWithUrl[];
   removed: Set<number>;
   onToggleRemove(id: number): void;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
 }) {
   if (clips.length === 0) {
     return (
@@ -664,6 +679,8 @@ function ExistingClipsEditor({
           clip={clip}
           removed={removed.has(clip.id)}
           onToggleRemove={() => onToggleRemove(clip.id)}
+          styles={styles}
+          colors={colors}
         />
       ))}
     </View>
@@ -674,10 +691,14 @@ function ClipEditCard({
   clip,
   removed,
   onToggleRemove,
+  styles,
+  colors,
 }: {
   clip: ClipWithUrl;
   removed: boolean;
   onToggleRemove(): void;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
 }) {
   const player = useAudioPlayer(clip.signed_url ?? undefined, { updateInterval: 500 });
   const status = useAudioPlayerStatus(player);
@@ -732,7 +753,11 @@ interface VoiceAddProps {
   voice: ReturnType<typeof useVoiceNoteRecorder>;
 }
 
-function VoiceNoteAddPill({ voice }: VoiceAddProps) {
+function VoiceNoteAddPill({
+  voice,
+  styles,
+  colors,
+}: VoiceAddProps & { styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   const seconds = Math.floor(voice.elapsedMs / 1000);
   const dur = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(
     seconds % 60,
@@ -791,7 +816,7 @@ function formatSeconds(s: number): string {
   return `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   flex: { flex: 1 },
   scroll: {

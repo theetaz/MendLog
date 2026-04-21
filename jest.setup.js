@@ -44,3 +44,19 @@ jest.mock('expo-font', () => ({
   loadAsync: jest.fn(async () => {}),
   isLoaded: jest.fn(() => true),
 }));
+
+// `useFocusEffect` needs a NavigationContainer at runtime. Tests render
+// screens in isolation, so stub it to a plain effect that fires once.
+jest.mock('expo-router', () => {
+  const actual = jest.requireActual('expo-router');
+  const React = require('react');
+  return {
+    ...actual,
+    useFocusEffect: (effect) => {
+      React.useEffect(() => {
+        const cleanup = effect();
+        return typeof cleanup === 'function' ? cleanup : undefined;
+      }, [effect]);
+    },
+  };
+});

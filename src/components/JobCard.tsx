@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fonts, radii } from '../design/tokens';
+import { fonts, radii, type ThemeColors, useColors } from '../design/tokens';
 import { Icon } from '../design/components/Icon';
 import { LangBadge } from '../design/components/LangBadge';
 import { Pill } from '../design/components/Pill';
@@ -31,6 +32,8 @@ function splitDate(iso: string): { month: string; day: string } {
 }
 
 export function JobCard({ job, variant = 'full', photos, onPress, testID }: JobCardProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const tone = statusTone(job.status);
   const idle = formatIdle(job.idleMinutes);
 
@@ -120,7 +123,7 @@ export function JobCard({ job, variant = 'full', photos, onPress, testID }: JobC
 }
 
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   compactCard: {
     flexDirection: 'row',
     gap: 10,
@@ -264,4 +267,4 @@ const styles = StyleSheet.create({
     height: 'auto',
     borderRadius: 0,
   },
-});
+  });

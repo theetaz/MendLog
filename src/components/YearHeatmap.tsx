@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../design/components/Icon';
-import { colors, fonts, radii, spacing } from '../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../design/tokens';
 import type { ActivityDay } from '../types/job';
 import { heatColor } from '../utils/heat';
 
@@ -60,6 +60,8 @@ const LABEL_COL_WIDTH = 26;
 const GAP = 2;
 
 export function YearHeatmap({ data, onOpenDay }: YearHeatmapProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [containerWidth, setContainerWidth] = useState(0);
   const [selected, setSelected] = useState<ActivityDay | null>(null);
 
@@ -124,7 +126,7 @@ export function YearHeatmap({ data, onOpenDay }: YearHeatmapProps) {
                           width: cellSize,
                           height: cellSize,
                           borderRadius: Math.max(1, Math.floor(cellSize / 4)),
-                          backgroundColor: heatColor(day.count),
+                          backgroundColor: heatColor(day.count, colors),
                         },
                         selected?.date === day.date && styles.cellSelected,
                       ]}
@@ -135,7 +137,7 @@ export function YearHeatmap({ data, onOpenDay }: YearHeatmapProps) {
             </View>
           </View>
 
-          <Legend />
+          <Legend styles={styles} colors={colors} />
 
           {selected && (
             <View style={styles.tooltipCard}>
@@ -176,14 +178,20 @@ export function YearHeatmap({ data, onOpenDay }: YearHeatmapProps) {
   );
 }
 
-function Legend() {
+function Legend({
+  styles,
+  colors,
+}: {
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
+}) {
   return (
     <View style={styles.legendRow}>
       <Text style={styles.legendText}>Less</Text>
       {[0, 1, 3, 5, 8].map((count, i) => (
         <View
           key={i}
-          style={[styles.legendSwatch, { backgroundColor: heatColor(count) }]}
+          style={[styles.legendSwatch, { backgroundColor: heatColor(count, colors) }]}
         />
       ))}
       <Text style={styles.legendText}>More</Text>
@@ -191,7 +199,7 @@ function Legend() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: 6 },
   monthRow: { flexDirection: 'row' },
   monthRowGrid: { flexDirection: 'row', flex: 1 },

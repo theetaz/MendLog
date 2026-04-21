@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../design/components/Icon';
-import { colors, fonts, radii, spacing } from '../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../design/tokens';
 import type { ActivityDay } from '../types/job';
 import { heatColor } from '../utils/heat';
 
@@ -83,6 +83,8 @@ export function MonthHeatmap({
   onOpenDay,
   months = 3,
 }: MonthHeatmapProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [width, setWidth] = useState(0);
   const [selected, setSelected] = useState<ActivityDay | null>(null);
 
@@ -151,7 +153,7 @@ export function MonthHeatmap({
                 {g.weeks.map((week, wi) => (
                   <View key={`w-${wi}`} style={{ gap: CELL_GAP }}>
                     {week.map(({ day, inMonth }) => {
-                      const bg = inMonth ? heatColor(day.count) : colors.lineSoft;
+                      const bg = inMonth ? heatColor(day.count, colors) : colors.lineSoft;
                       return (
                         <Pressable
                           key={day.date}
@@ -212,7 +214,7 @@ export function MonthHeatmap({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: spacing.sm },
   monthRow: { flexDirection: 'row', alignItems: 'flex-end' },
   monthLabel: {

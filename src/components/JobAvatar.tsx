@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
+import { useMemo } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import { colors, fonts } from '../design/tokens';
+import { fonts, type ThemeColors, useColors } from '../design/tokens';
 
 export interface AvatarPhoto {
   url: string;
@@ -43,6 +44,8 @@ function initialsFor(machine: string): string {
 }
 
 export function JobAvatar({ machine, photos, size = 42, style, testID }: JobAvatarProps) {
+  const colors = useColors();
+  const themed = useMemo(() => makeThemedStyles(colors), [colors]);
   const dim: ViewStyle = { width: size, height: size };
   const available = (photos ?? []).filter((p) => !!p?.url).slice(0, 4);
 
@@ -52,9 +55,9 @@ export function JobAvatar({ machine, photos, size = 42, style, testID }: JobAvat
     return (
       <View
         testID={testID}
-        style={[styles.tile, dim, { backgroundColor: bg }, style]}
+        style={[themed.tile, dim, { backgroundColor: bg }, style]}
       >
-        <Text style={[styles.initials, { fontSize: initialsFontSize }]}>
+        <Text style={[themed.initials, { fontSize: initialsFontSize }]}>
           {initialsFor(machine)}
         </Text>
       </View>
@@ -62,7 +65,7 @@ export function JobAvatar({ machine, photos, size = 42, style, testID }: JobAvat
   }
 
   return (
-    <View testID={testID} style={[styles.tile, dim, style]}>
+    <View testID={testID} style={[themed.tile, dim, style]}>
       <Collage photos={available} />
     </View>
   );
@@ -86,50 +89,38 @@ function Collage({ photos }: { photos: AvatarPhoto[] }) {
   }
   if (photos.length === 2) {
     return (
-      <View style={styles.row}>
-        <View style={styles.half}><Tile photo={photos[0]!} /></View>
-        <View style={styles.half}><Tile photo={photos[1]!} /></View>
+      <View style={layoutStyles.row}>
+        <View style={layoutStyles.half}><Tile photo={photos[0]!} /></View>
+        <View style={layoutStyles.half}><Tile photo={photos[1]!} /></View>
       </View>
     );
   }
   if (photos.length === 3) {
     return (
-      <View style={styles.row}>
-        <View style={styles.half}><Tile photo={photos[0]!} /></View>
-        <View style={styles.half}>
-          <View style={styles.half}><Tile photo={photos[1]!} /></View>
-          <View style={styles.half}><Tile photo={photos[2]!} /></View>
+      <View style={layoutStyles.row}>
+        <View style={layoutStyles.half}><Tile photo={photos[0]!} /></View>
+        <View style={layoutStyles.half}>
+          <View style={layoutStyles.half}><Tile photo={photos[1]!} /></View>
+          <View style={layoutStyles.half}><Tile photo={photos[2]!} /></View>
         </View>
       </View>
     );
   }
   return (
-    <View style={styles.row}>
-      <View style={styles.half}>
-        <View style={styles.half}><Tile photo={photos[0]!} /></View>
-        <View style={styles.half}><Tile photo={photos[1]!} /></View>
+    <View style={layoutStyles.row}>
+      <View style={layoutStyles.half}>
+        <View style={layoutStyles.half}><Tile photo={photos[0]!} /></View>
+        <View style={layoutStyles.half}><Tile photo={photos[1]!} /></View>
       </View>
-      <View style={styles.half}>
-        <View style={styles.half}><Tile photo={photos[2]!} /></View>
-        <View style={styles.half}><Tile photo={photos[3]!} /></View>
+      <View style={layoutStyles.half}>
+        <View style={layoutStyles.half}><Tile photo={photos[2]!} /></View>
+        <View style={layoutStyles.half}><Tile photo={photos[3]!} /></View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  tile: {
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: colors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  initials: {
-    fontFamily: fonts.sansBold,
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
+const layoutStyles = StyleSheet.create({
   row: {
     flex: 1,
     flexDirection: 'row',
@@ -138,3 +129,19 @@ const styles = StyleSheet.create({
   },
   half: { flex: 1 },
 });
+
+const makeThemedStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    tile: {
+      borderRadius: 10,
+      overflow: 'hidden',
+      backgroundColor: colors.line,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    initials: {
+      fontFamily: fonts.sansBold,
+      color: '#fff',
+      letterSpacing: 0.5,
+    },
+  });

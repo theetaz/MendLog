@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View } from 'react-native';
-import { colors } from '../design/tokens';
+import { useColors } from '../design/tokens';
 import type { ActivityDay } from '../types/job';
 import { heatColor } from '../utils/heat';
 
@@ -20,8 +20,8 @@ function chunkByWeeks(days: ActivityDay[]): ActivityDay[][] {
 }
 
 export function ContributionGrid({ data, variant = 'compact', onCellTap }: ContributionGridProps) {
+  const colors = useColors();
   const weeks = chunkByWeeks(data);
-  // compact = fixed-size cells (used in small tiles); full = fills parent width
   const compact = variant === 'compact';
   const gap = compact ? 3 : 2;
   const fixedCell = compact ? 12 : undefined;
@@ -41,7 +41,7 @@ export function ContributionGrid({ data, variant = 'compact', onCellTap }: Contr
               compact
                 ? { width: fixedCell, height: fixedCell, borderRadius: 3 }
                 : styles.cellFlex,
-              { backgroundColor: heatColor(day.count) },
+              { backgroundColor: heatColor(day.count, colors) },
             ];
             if (!onCellTap) {
               return <View key={day.date} testID={`cell-${day.date}`} style={cellStyle} />;

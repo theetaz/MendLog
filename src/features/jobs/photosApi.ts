@@ -104,36 +104,48 @@ export async function invokeAnnotatePhoto(
   if (error) throw new Error(`annotate invoke failed: ${error.message}`);
 }
 
+export interface PhotoThumb {
+  url: string;
+  blurhash: string | null;
+}
+
 /**
- * Returns a map of `job_id → up to `perJobLimit` signed-URL thumbnails`,
- * in insertion order (oldest first). Used by list views to populate
- * JobAvatar collages without an N+1 request per card.
+ * Returns a map of `job_id → up to `perJobLimit` photo thumbnails`
+ * (signed URL + blurhash), oldest first. Used by list views to
+ * populate JobAvatar collages without an N+1 request per card.
  */
 export async function fetchPhotoThumbsForJobs(
   jobIds: number[],
   perJobLimit = 4,
   client?: SupabaseClient,
-): Promise<Map<number, string[]>> {
+): Promise<Map<number, PhotoThumb[]>> {
   if (jobIds.length === 0) return new Map();
   const c = client ?? getSupabaseClient();
 
   const { data, error } = await c
     .from('job_photos')
-    .select('job_id, storage_path, created_at')
+    .select('job_id, storage_path, blurhash, created_at')
     .in('job_id', jobIds)
     .order('created_at', { ascending: true });
   if (error) throw new Error(`photo thumbs fetch: ${error.message}`);
 
-  const pathsByJob = new Map<number, string[]>();
-  for (const row of (data ?? []) as Array<{ job_id: number; storage_path: string }>) {
-    const list = pathsByJob.get(row.job_id) ?? [];
+  interface Row {
+    job_id: number;
+    storage_path: string;
+    blurhash: string | null;
+  }
+  const rowsByJob = new Map<number, Row[]>();
+  for (const row of (data ?? []) as Row[]) {
+    const list = rowsByJob.get(row.job_id) ?? [];
     if (list.length < perJobLimit) {
-      list.push(row.storage_path);
-      pathsByJob.set(row.job_id, list);
+      list.push(row);
+      rowsByJob.set(row.job_id, list);
     }
   }
 
-  const allPaths = Array.from(pathsByJob.values()).flat();
+  const allPaths = Array.from(rowsByJob.values())
+    .flat()
+    .map((r) => r.storage_path);
   if (allPaths.length === 0) return new Map();
 
   const { data: signed, error: signErr } = await c.storage
@@ -149,12 +161,15 @@ export async function fetchPhotoThumbsForJobs(
     if (entry.path && entry.signedUrl) urlByPath.set(entry.path, entry.signedUrl);
   }
 
-  const result = new Map<number, string[]>();
-  for (const [jobId, paths] of pathsByJob) {
-    const urls = paths
-      .map((p) => urlByPath.get(p))
-      .filter((u): u is string => !!u);
-    if (urls.length > 0) result.set(jobId, urls);
+  const result = new Map<number, PhotoThumb[]>();
+  for (const [jobId, rows] of rowsByJob) {
+    const thumbs: PhotoThumb[] = rows
+      .map((r) => {
+        const url = urlByPath.get(r.storage_path);
+        return url ? { url, blurhash: r.blurhash } : null;
+      })
+      .filter((t): t is PhotoThumb => !!t);
+    if (thumbs.length > 0) result.set(jobId, thumbs);
   }
   return result;
 }

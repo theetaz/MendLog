@@ -1,10 +1,10 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -190,7 +190,13 @@ function PhotoCarousel({ photos }: { photos: PhotoWithUrl[] }) {
       {photos.map((photo) => (
         <View key={photo.id} style={styles.photoCell}>
           {photo.signed_url ? (
-            <Image source={{ uri: photo.signed_url }} style={styles.photoImg} resizeMode="cover" />
+            <Image
+              source={{ uri: photo.signed_url }}
+              placeholder={photo.blurhash ? { blurhash: photo.blurhash } : undefined}
+              transition={250}
+              contentFit="cover"
+              style={styles.photoImg}
+            />
           ) : (
             <View style={[styles.photoImg, styles.photoMissing]}>
               <Icon name="photo" size={28} color={colors.mute} weight={1.5} />

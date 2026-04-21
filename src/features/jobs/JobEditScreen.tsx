@@ -1,9 +1,9 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -606,8 +606,10 @@ function ExistingPhotosEditor({
             {photo.signed_url ? (
               <Image
                 source={{ uri: photo.signed_url }}
+                placeholder={photo.blurhash ? { blurhash: photo.blurhash } : undefined}
+                transition={200}
+                contentFit="cover"
                 style={[styles.existingPhotoImg, isRemoved && styles.mediaDim]}
-                resizeMode="cover"
               />
             ) : (
               <View style={[styles.existingPhotoImg, styles.photoMissing]}>

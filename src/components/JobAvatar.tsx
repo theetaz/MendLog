@@ -1,23 +1,29 @@
-import { Image, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { colors, fonts } from '../design/tokens';
+
+export interface AvatarPhoto {
+  url: string;
+  blurhash?: string | null;
+}
 
 interface JobAvatarProps {
   machine: string;
-  photoUrls?: string[];
+  photos?: AvatarPhoto[];
   size?: number;
   style?: ViewStyle;
   testID?: string;
 }
 
 const INITIAL_BG = [
-  '#1E3A5F', // navy
-  '#166534', // emerald deep
-  '#A16207', // ochre
-  '#7C3AED', // violet
-  '#C2410C', // rust
-  '#0E7490', // cyan
-  '#4338CA', // indigo
-  '#9F1239', // crimson
+  '#1E3A5F',
+  '#166534',
+  '#A16207',
+  '#7C3AED',
+  '#C2410C',
+  '#0E7490',
+  '#4338CA',
+  '#9F1239',
 ];
 
 function hashString(s: string): number {
@@ -36,9 +42,9 @@ function initialsFor(machine: string): string {
   return trimmed.slice(0, 2).toUpperCase();
 }
 
-export function JobAvatar({ machine, photoUrls, size = 42, style, testID }: JobAvatarProps) {
+export function JobAvatar({ machine, photos, size = 42, style, testID }: JobAvatarProps) {
   const dim: ViewStyle = { width: size, height: size };
-  const available = (photoUrls ?? []).filter(Boolean).slice(0, 4);
+  const available = (photos ?? []).filter((p) => !!p?.url).slice(0, 4);
 
   if (available.length === 0) {
     const bg = INITIAL_BG[hashString(machine) % INITIAL_BG.length] ?? INITIAL_BG[0];
@@ -57,44 +63,55 @@ export function JobAvatar({ machine, photoUrls, size = 42, style, testID }: JobA
 
   return (
     <View testID={testID} style={[styles.tile, dim, style]}>
-      <Collage photoUrls={available} />
+      <Collage photos={available} />
     </View>
   );
 }
 
-function Collage({ photoUrls }: { photoUrls: string[] }) {
-  if (photoUrls.length === 1) {
-    return <Image source={{ uri: photoUrls[0] }} style={StyleSheet.absoluteFill} resizeMode="cover" />;
+function Tile({ photo }: { photo: AvatarPhoto }) {
+  return (
+    <Image
+      source={{ uri: photo.url }}
+      placeholder={photo.blurhash ? { blurhash: photo.blurhash } : undefined}
+      transition={200}
+      contentFit="cover"
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
+
+function Collage({ photos }: { photos: AvatarPhoto[] }) {
+  if (photos.length === 1) {
+    return <Tile photo={photos[0]!} />;
   }
-  if (photoUrls.length === 2) {
+  if (photos.length === 2) {
     return (
       <View style={styles.row}>
-        <Image source={{ uri: photoUrls[0] }} style={styles.half} resizeMode="cover" />
-        <Image source={{ uri: photoUrls[1] }} style={styles.half} resizeMode="cover" />
+        <View style={styles.half}><Tile photo={photos[0]!} /></View>
+        <View style={styles.half}><Tile photo={photos[1]!} /></View>
       </View>
     );
   }
-  if (photoUrls.length === 3) {
+  if (photos.length === 3) {
     return (
       <View style={styles.row}>
-        <Image source={{ uri: photoUrls[0] }} style={styles.half} resizeMode="cover" />
+        <View style={styles.half}><Tile photo={photos[0]!} /></View>
         <View style={styles.half}>
-          <Image source={{ uri: photoUrls[1] }} style={styles.half} resizeMode="cover" />
-          <Image source={{ uri: photoUrls[2] }} style={styles.half} resizeMode="cover" />
+          <View style={styles.half}><Tile photo={photos[1]!} /></View>
+          <View style={styles.half}><Tile photo={photos[2]!} /></View>
         </View>
       </View>
     );
   }
-  // 4
   return (
     <View style={styles.row}>
       <View style={styles.half}>
-        <Image source={{ uri: photoUrls[0] }} style={styles.half} resizeMode="cover" />
-        <Image source={{ uri: photoUrls[1] }} style={styles.half} resizeMode="cover" />
+        <View style={styles.half}><Tile photo={photos[0]!} /></View>
+        <View style={styles.half}><Tile photo={photos[1]!} /></View>
       </View>
       <View style={styles.half}>
-        <Image source={{ uri: photoUrls[2] }} style={styles.half} resizeMode="cover" />
-        <Image source={{ uri: photoUrls[3] }} style={styles.half} resizeMode="cover" />
+        <View style={styles.half}><Tile photo={photos[2]!} /></View>
+        <View style={styles.half}><Tile photo={photos[3]!} /></View>
       </View>
     </View>
   );
@@ -119,7 +136,5 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  half: {
-    flex: 1,
-  },
+  half: { flex: 1 },
 });

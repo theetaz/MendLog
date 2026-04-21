@@ -5,7 +5,7 @@ import { LangBadge } from '../design/components/LangBadge';
 import { Pill } from '../design/components/Pill';
 import type { Job } from '../types/job';
 import { formatIdle } from '../utils/idle';
-import { JobAvatar } from './JobAvatar';
+import { type AvatarPhoto, JobAvatar } from './JobAvatar';
 import { statusTone } from './jobStatus';
 
 export type JobCardVariant = 'full' | 'horizontal' | 'compact';
@@ -13,7 +13,7 @@ export type JobCardVariant = 'full' | 'horizontal' | 'compact';
 interface JobCardProps {
   job: Job;
   variant?: JobCardVariant;
-  photoUrls?: string[];
+  photos?: AvatarPhoto[];
   onPress?: () => void;
   testID?: string;
 }
@@ -30,7 +30,7 @@ function splitDate(iso: string): { month: string; day: string } {
   };
 }
 
-export function JobCard({ job, variant = 'full', photoUrls, onPress, testID }: JobCardProps) {
+export function JobCard({ job, variant = 'full', photos, onPress, testID }: JobCardProps) {
   const tone = statusTone(job.status);
   const idle = formatIdle(job.idleMinutes);
 
@@ -39,7 +39,7 @@ export function JobCard({ job, variant = 'full', photoUrls, onPress, testID }: J
       <Pressable testID={testID} onPress={onPress} style={styles.compactCard}>
         <JobAvatar
           machine={job.machine}
-          photoUrls={photoUrls}
+          photos={photos}
           size={42}
           style={styles.compactPhoto}
         />
@@ -114,10 +114,11 @@ export function JobCard({ job, variant = 'full', photoUrls, onPress, testID }: J
           </View>
         </View>
       </View>
-      <JobAvatar machine={job.machine} photoUrls={photoUrls} style={styles.fullPhoto} />
+      <JobAvatar machine={job.machine} photos={photos} style={styles.fullPhoto} />
     </Pressable>
   );
 }
+
 
 const styles = StyleSheet.create({
   compactCard: {

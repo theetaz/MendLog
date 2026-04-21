@@ -16,7 +16,7 @@ import { colors, fonts, radii, spacing } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { Job } from '../../types/job';
 import { formatIdle } from '../../utils/idle';
-import { fetchPhotoThumbsForJobs } from './photosApi';
+import { fetchPhotoThumbsForJobs, type PhotoThumb } from './photosApi';
 
 interface DayViewScreenProps {
   repo: JobsRepository;
@@ -39,7 +39,7 @@ export function DayViewScreen({
 }: DayViewScreenProps) {
   const insets = useSafeAreaInsets();
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [thumbs, setThumbs] = useState<Map<number, string[]>>(new Map());
+  const [thumbs, setThumbs] = useState<Map<number, PhotoThumb[]>>(new Map());
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -197,7 +197,7 @@ export function DayViewScreen({
                 <JobCard
                   job={item}
                   variant="compact"
-                  photoUrls={thumbs.get(item.id)}
+                  photos={thumbs.get(item.id)}
                   onPress={() => onOpenJob(item.id)}
                   testID={`day-card-${item.id}`}
                 />

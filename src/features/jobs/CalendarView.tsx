@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../../design/components/Icon';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { Job } from '../../types/job';
 import { heatColor } from '../../utils/heat';
 
@@ -63,6 +63,8 @@ export function CalendarView({
   onSelectDate,
   onOpenDay,
 }: CalendarViewProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const now = clock();
   const [cursor, setCursor] = useState<{ year: number; month: number }>({
     year: now.getFullYear(),
@@ -155,7 +157,7 @@ export function CalendarView({
                   style={({ pressed }) => [
                     styles.cell,
                     {
-                      backgroundColor: cell.count > 0 ? heatColor(cell.count) : colors.surface,
+                      backgroundColor: cell.count > 0 ? heatColor(cell.count, colors) : colors.surface,
                       borderColor: isSelected ? colors.text : isToday ? colors.navy : colors.line,
                       borderWidth: isSelected || isToday ? 2 : 1,
                       opacity: cell.inMonth ? 1 : 0.4,
@@ -191,7 +193,7 @@ export function CalendarView({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { gap: spacing.md },
   header: {
     flexDirection: 'row',

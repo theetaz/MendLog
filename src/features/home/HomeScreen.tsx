@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppBar } from '../../design/components/AppBar';
 import { Icon } from '../../design/components/Icon';
 import { SectionLabel } from '../../design/components/SectionLabel';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import { JobCard } from '../../components/JobCard';
 import { MonthHeatmap } from '../../components/MonthHeatmap';
 import type { JobsRepository } from '../../repositories/JobsRepository';
@@ -32,6 +32,8 @@ export function HomeScreen({
   onOpenJob,
   onOpenDay,
 }: HomeScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const data = useHomeData(repo, clock);
   const insets = useSafeAreaInsets();
   const todayIso = todayIsoLocal(clock());
@@ -134,16 +136,26 @@ export function HomeScreen({
 
         <SectionLabel>This week</SectionLabel>
         <View style={styles.statsRow}>
-          <Stat label="Jobs" value={String(data.thisWeekCount)} />
-          <Stat label="Avg idle" value={data.avgIdle} />
-          <Stat label="Streak" value={String(data.streak)} suffix="days" />
+          <Stat label="Jobs" value={String(data.thisWeekCount)} styles={styles} />
+          <Stat label="Avg idle" value={data.avgIdle} styles={styles} />
+          <Stat label="Streak" value={String(data.streak)} suffix="days" styles={styles} />
         </View>
       </ScrollView>
     </View>
   );
 }
 
-function Stat({ label, value, suffix }: { label: string; value: string; suffix?: string }) {
+function Stat({
+  label,
+  value,
+  suffix,
+  styles,
+}: {
+  label: string;
+  value: string;
+  suffix?: string;
+  styles: ReturnType<typeof makeStyles>;
+}) {
   return (
     <View style={styles.statTile}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -155,7 +167,7 @@ function Stat({ label, value, suffix }: { label: string; value: string; suffix?:
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scroll: {
     paddingHorizontal: spacing.xl,

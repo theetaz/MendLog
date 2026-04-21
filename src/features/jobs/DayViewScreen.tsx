@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobCard } from '../../components/JobCard';
 import { AppBar, Icon } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { Job } from '../../types/job';
 import { formatIdle } from '../../utils/idle';
@@ -37,6 +37,8 @@ export function DayViewScreen({
   onOpenJob,
   onNavigateDay,
 }: DayViewScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [thumbs, setThumbs] = useState<Map<number, PhotoThumb[]>>(new Map());
@@ -142,6 +144,7 @@ export function DayViewScreen({
       next={next}
       onNavigateDay={onNavigateDay}
       summary={summarize(jobs)}
+      styles={styles}
     />
   );
 
@@ -226,7 +229,14 @@ interface DayHeaderProps {
   summary: DaySummary;
 }
 
-function DayHeader({ prev, next, onNavigateDay, summary }: DayHeaderProps) {
+function DayHeader({
+  prev,
+  next,
+  onNavigateDay,
+  summary,
+  styles,
+}: DayHeaderProps & { styles: ReturnType<typeof makeStyles> }) {
+  const colors = useColors();
   return (
     <View style={styles.headerBlock}>
       <View style={styles.stepperRow}>
@@ -247,15 +257,15 @@ function DayHeader({ prev, next, onNavigateDay, summary }: DayHeaderProps) {
       </View>
 
       <View style={styles.statsRow}>
-        <StatTile label="Jobs" value={String(summary.count)} />
-        <StatTile label="Total idle" value={summary.idleLabel} />
-        <StatTile label="Machines" value={String(summary.machines)} />
+        <StatTile label="Jobs" value={String(summary.count)} styles={styles} />
+        <StatTile label="Total idle" value={summary.idleLabel} styles={styles} />
+        <StatTile label="Machines" value={String(summary.machines)} styles={styles} />
       </View>
     </View>
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, styles }: { label: string; value: string; styles: ReturnType<typeof makeStyles> }) {
   return (
     <View style={styles.statTile}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -318,7 +328,7 @@ function formatFullDate(dateIso: string): string {
   });
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   list: {
     paddingHorizontal: spacing.xl,

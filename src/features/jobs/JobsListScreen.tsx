@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobCard } from '../../components/JobCard';
 import { AppBar, Icon, SectionLabel } from '../../design/components';
-import { colors, fonts, spacing } from '../../design/tokens';
+import { fonts, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { Job } from '../../types/job';
 
@@ -24,6 +24,8 @@ interface JobsListScreenProps {
 type Row = { kind: 'header'; key: string; label: string } | { kind: 'job'; key: string; job: Job };
 
 export function JobsListScreen({ repo, clock = () => new Date(), onOpenJob }: JobsListScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,6 +95,8 @@ export function JobsListBody({
   onRefresh,
   onOpenJob,
 }: JobsListBodyProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const rows = useMemo(() => groupByRelativeDate(jobs, clock()), [jobs, clock]);
 
@@ -194,7 +198,7 @@ function shiftDays(d: Date, delta: number): Date {
   return next;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: {
     flex: 1,

@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobCard } from '../../components/JobCard';
 import { AppBar, Icon, SectionLabel } from '../../design/components';
-import { colors, fonts, radii, spacing } from '../../design/tokens';
+import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { Job } from '../../types/job';
 import { CalendarView, countsByDate } from './CalendarView';
@@ -30,6 +30,8 @@ interface JobsTabScreenProps {
 }
 
 export function JobsTabScreen({ repo, onOpenJob, onOpenDay }: JobsTabScreenProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<JobsView>('list');
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -96,12 +98,21 @@ export function JobsTabScreen({ repo, onOpenJob, onOpenDay }: JobsTabScreenProps
       <AppBar title="Jobs" subtitle={subtitle} />
 
       <View style={styles.toggleWrap}>
-        <Segment label="List" active={view === 'list'} onPress={() => switchView('list')} icon="list" />
+        <Segment
+          label="List"
+          active={view === 'list'}
+          onPress={() => switchView('list')}
+          icon="list"
+          styles={styles}
+          colors={colors}
+        />
         <Segment
           label="Calendar"
           active={view === 'calendar'}
           onPress={() => switchView('calendar')}
           icon="calendar"
+          styles={styles}
+          colors={colors}
         />
       </View>
 
@@ -146,6 +157,7 @@ export function JobsTabScreen({ repo, onOpenJob, onOpenDay }: JobsTabScreenProps
             jobs={jobs}
             onOpenJob={onOpenJob}
             onOpenDay={onOpenDay}
+            styles={styles}
           />
         </ScrollView>
       )}
@@ -160,7 +172,14 @@ interface SelectedDayListProps {
   onOpenDay(dateIso: string): void;
 }
 
-function SelectedDayList({ selectedDate, jobs, onOpenJob, onOpenDay }: SelectedDayListProps) {
+function SelectedDayList({
+  selectedDate,
+  jobs,
+  onOpenJob,
+  onOpenDay,
+  styles,
+}: SelectedDayListProps & { styles: ReturnType<typeof makeStyles> }) {
+  const colors = useColors();
   if (!selectedDate) {
     return (
       <View style={styles.pickDayHint}>
@@ -229,11 +248,15 @@ function Segment({
   active,
   onPress,
   icon,
+  styles,
+  colors,
 }: {
   label: string;
   active: boolean;
   onPress(): void;
   icon: 'list' | 'calendar';
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
 }) {
   return (
     <Pressable
@@ -250,7 +273,7 @@ function Segment({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   toggleWrap: {
     flexDirection: 'row',

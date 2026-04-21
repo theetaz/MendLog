@@ -35,6 +35,12 @@ const ICONS: Record<string, Renderer> = {
     </>
   ),
   plus: ({ color, weight }) => <Path d="M12 5v14M5 12h14" {...stroke(color, weight)} />,
+  'chevron-left': ({ color, weight }) => (
+    <Path d="M15 18l-6-6 6-6" {...stroke(color, weight)} />
+  ),
+  'chevron-right': ({ color, weight }) => (
+    <Path d="M9 18l6-6-6-6" {...stroke(color, weight)} />
+  ),
   search: ({ color, weight }) => (
     <>
       <Circle cx={11} cy={11} r={7} {...stroke(color, weight)} />

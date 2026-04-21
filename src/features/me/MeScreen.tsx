@@ -11,7 +11,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { YearHeatmap } from '../../components/YearHeatmap';
 import { AppBar, Btn, Icon, SectionLabel } from '../../design/components';
 import { colors, fonts, radii, spacing } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
@@ -24,7 +23,6 @@ interface MeScreenProps {
   memberSince?: string;
   repo?: JobsRepository | null;
   onSignOut(): Promise<void> | void;
-  onOpenDay?(dateIso: string): void;
   onOpenJobs?(): void;
   confirmSignOut?: (onConfirm: () => void) => void;
 }
@@ -54,7 +52,6 @@ export function MeScreen({
   memberSince,
   repo,
   onSignOut,
-  onOpenDay,
   onOpenJobs,
   confirmSignOut = defaultConfirm,
 }: MeScreenProps) {
@@ -148,13 +145,6 @@ export function MeScreen({
               </View>
             ) : (
               <>
-                <View style={styles.heatmapCard}>
-                  <YearHeatmap
-                    data={data.activity}
-                    onOpenDay={(date) => onOpenDay?.(date)}
-                  />
-                </View>
-
                 {hasJobs && (
                   <View style={styles.streakRow}>
                     <Icon name="flash" size={14} color={colors.amber} weight={2} />
@@ -339,13 +329,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sans,
     fontSize: 13,
     color: colors.red,
-  },
-  heatmapCard: {
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.surface,
   },
   streakRow: {
     flexDirection: 'row',

@@ -22,7 +22,6 @@ export default function MeRoute() {
       memberSince={memberSince}
       repo={repo}
       onSignOut={signOut}
-      onOpenDay={(date) => router.push(`/day/${date}` as never)}
       onOpenJobs={() => router.push('/(tabs)/jobs' as never)}
     />
   );

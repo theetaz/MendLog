@@ -16,6 +16,7 @@ import { colors, fonts, radii, spacing } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { Job } from '../../types/job';
 import { formatIdle } from '../../utils/idle';
+import { fetchPhotoThumbsForJobs } from './photosApi';
 
 interface DayViewScreenProps {
   repo: JobsRepository;
@@ -38,6 +39,7 @@ export function DayViewScreen({
 }: DayViewScreenProps) {
   const insets = useSafeAreaInsets();
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [thumbs, setThumbs] = useState<Map<number, string[]>>(new Map());
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -45,21 +47,38 @@ export function DayViewScreen({
   const [error, setError] = useState<string | null>(null);
   const offsetRef = useRef(0);
 
+  const loadThumbs = useCallback(async (jobRows: Job[]) => {
+    const ids = jobRows.map((j) => j.id).filter((id) => !thumbs.has(id));
+    if (ids.length === 0) return;
+    try {
+      const map = await fetchPhotoThumbsForJobs(ids, 4);
+      setThumbs((prev) => {
+        const next = new Map(prev);
+        for (const [k, v] of map) next.set(k, v);
+        return next;
+      });
+    } catch (e) {
+      console.warn('load thumbs:', e);
+    }
+  }, [thumbs]);
+
   const reset = useCallback(async () => {
     setLoading(true);
     offsetRef.current = 0;
+    setThumbs(new Map());
     try {
       const page = await repo.listJobsForDate(dateIso, { limit: PAGE_SIZE, offset: 0 });
       setJobs(page.jobs);
       setHasMore(page.hasMore);
       offsetRef.current = page.jobs.length;
       setError(null);
+      loadThumbs(page.jobs);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
       setLoading(false);
     }
-  }, [repo, dateIso]);
+  }, [repo, dateIso, loadThumbs]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -72,28 +91,31 @@ export function DayViewScreen({
       setJobs((prev) => prev.concat(page.jobs));
       setHasMore(page.hasMore);
       offsetRef.current += page.jobs.length;
+      loadThumbs(page.jobs);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load more');
     } finally {
       setLoadingMore(false);
     }
-  }, [repo, dateIso, loadingMore, hasMore]);
+  }, [repo, dateIso, loadingMore, hasMore, loadThumbs]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
     offsetRef.current = 0;
+    setThumbs(new Map());
     try {
       const page = await repo.listJobsForDate(dateIso, { limit: PAGE_SIZE, offset: 0 });
       setJobs(page.jobs);
       setHasMore(page.hasMore);
       offsetRef.current = page.jobs.length;
       setError(null);
+      loadThumbs(page.jobs);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to refresh');
     } finally {
       setRefreshing(false);
     }
-  }, [repo, dateIso]);
+  }, [repo, dateIso, loadThumbs]);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,6 +189,7 @@ export function DayViewScreen({
                 <JobCard
                   job={item}
                   variant="compact"
+                  photoUrls={thumbs.get(item.id)}
                   onPress={() => onOpenJob(item.id)}
                   testID={`day-card-${item.id}`}
                 />

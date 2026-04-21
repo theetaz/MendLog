@@ -46,10 +46,16 @@ export function DayViewScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const offsetRef = useRef(0);
+  const loadedThumbIdsRef = useRef<Set<number>>(new Set());
 
+  // Stable callback — reads the already-loaded set from a ref so updating the
+  // thumbs state doesn't invalidate loadThumbs and retrigger useFocusEffect.
   const loadThumbs = useCallback(async (jobRows: Job[]) => {
-    const ids = jobRows.map((j) => j.id).filter((id) => !thumbs.has(id));
+    const ids = jobRows
+      .map((j) => j.id)
+      .filter((id) => !loadedThumbIdsRef.current.has(id));
     if (ids.length === 0) return;
+    ids.forEach((id) => loadedThumbIdsRef.current.add(id));
     try {
       const map = await fetchPhotoThumbsForJobs(ids, 4);
       setThumbs((prev) => {
@@ -60,12 +66,13 @@ export function DayViewScreen({
     } catch (e) {
       console.warn('load thumbs:', e);
     }
-  }, [thumbs]);
+  }, []);
 
   const reset = useCallback(async () => {
     setLoading(true);
     offsetRef.current = 0;
     setThumbs(new Map());
+    loadedThumbIdsRef.current = new Set();
     try {
       const page = await repo.listJobsForDate(dateIso, { limit: PAGE_SIZE, offset: 0 });
       setJobs(page.jobs);
@@ -103,6 +110,7 @@ export function DayViewScreen({
     setRefreshing(true);
     offsetRef.current = 0;
     setThumbs(new Map());
+    loadedThumbIdsRef.current = new Set();
     try {
       const page = await repo.listJobsForDate(dateIso, { limit: PAGE_SIZE, offset: 0 });
       setJobs(page.jobs);

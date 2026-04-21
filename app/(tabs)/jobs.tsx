@@ -1,10 +1,17 @@
-import { ComingSoon } from '../../src/features/placeholder/ComingSoon';
+import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
+import { JobsTabScreen } from '../../src/features/jobs/JobsTabScreen';
+import { getSupabaseClient } from '../../src/lib/supabase';
+import { SupabaseJobsRepository } from '../../src/repositories/SupabaseJobsRepository';
 
 export default function JobsRoute() {
+  const router = useRouter();
+  const repo = useMemo(() => new SupabaseJobsRepository(getSupabaseClient()), []);
   return (
-    <ComingSoon
-      title="Jobs"
-      blurb="List + calendar view of every repair. Filters, sticky date headers, monthly grid. Slice 2."
+    <JobsTabScreen
+      repo={repo}
+      onOpenJob={(id) => router.push(`/jobs/${id}` as never)}
+      onOpenDay={(date) => router.push(`/day/${date}` as never)}
     />
   );
 }

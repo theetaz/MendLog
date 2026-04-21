@@ -1,12 +1,13 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, fonts } from '../tokens';
 import type { Lang } from '../../types/job';
+import { fonts, useColors } from '../tokens';
 
 interface LangBadgeProps {
   lang?: Lang;
 }
 
 export function LangBadge({ lang = 'en' }: LangBadgeProps) {
+  const colors = useColors();
   const isSinhala = lang === 'si';
   return (
     <View style={[styles.badge, isSinhala ? styles.si : styles.en]}>

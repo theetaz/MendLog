@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
-import { colors, fonts } from '../tokens';
+import { fonts, type ThemeColors, useColors } from '../tokens';
 
 export type BtnKind = 'primary' | 'navy' | 'ghost' | 'danger' | 'soft';
 export type BtnSize = 'sm' | 'md' | 'lg';
@@ -21,13 +22,16 @@ const SIZES: Record<BtnSize, { paddingVertical: number; fontSize: number; border
   lg: { paddingVertical: 15, fontSize: 14.5, borderRadius: 13 },
 };
 
-const KINDS: Record<BtnKind, { bg: string; fg: string; border: string }> = {
-  primary: { bg: colors.yellow, fg: colors.ink, border: 'transparent' },
-  navy: { bg: colors.navy, fg: '#fff', border: 'transparent' },
-  ghost: { bg: 'transparent', fg: colors.text, border: colors.line },
-  danger: { bg: colors.red, fg: '#fff', border: 'transparent' },
-  soft: { bg: '#F1EEE6', fg: colors.text, border: 'transparent' },
-};
+function buildKinds(colors: ThemeColors) {
+  const record: Record<BtnKind, { bg: string; fg: string; border: string }> = {
+    primary: { bg: colors.yellow, fg: colors.ink, border: 'transparent' },
+    navy: { bg: colors.navy, fg: '#fff', border: 'transparent' },
+    ghost: { bg: 'transparent', fg: colors.text, border: colors.line },
+    danger: { bg: colors.red, fg: '#fff', border: 'transparent' },
+    soft: { bg: colors.lineSoft, fg: colors.text, border: 'transparent' },
+  };
+  return record;
+}
 
 export function Btn({
   children,
@@ -39,8 +43,9 @@ export function Btn({
   style,
   testID,
 }: BtnProps) {
+  const colors = useColors();
   const sz = SIZES[size];
-  const k = KINDS[kind];
+  const k = useMemo(() => buildKinds(colors)[kind], [colors, kind]);
   return (
     <Pressable
       testID={testID}

@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, fonts } from '../tokens';
+import { fonts, type ThemeColors, useColors } from '../tokens';
 import { Icon, type IconName } from './Icon';
 
 export type TabId = 'home' | 'jobs' | 'new' | 'search' | 'me';
@@ -26,6 +27,8 @@ const ITEMS: TabItem[] = [
 ];
 
 export function TabBar({ active, onTab }: TabBarProps) {
+  const colors = useColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) + 8 }]}>
@@ -52,7 +55,12 @@ export function TabBar({ active, onTab }: TabBarProps) {
             style={styles.tab}
           >
             <Icon name={item.icon} size={20} color={tint} weight={selected ? 2 : 1.5} />
-            <Text style={[styles.label, { color: tint, fontFamily: selected ? fonts.sansSemiBold : fonts.sansMedium }]}>
+            <Text
+              style={[
+                styles.label,
+                { color: tint, fontFamily: selected ? fonts.sansSemiBold : fonts.sansMedium },
+              ]}
+            >
               {item.label}
             </Text>
           </Pressable>
@@ -62,41 +70,42 @@ export function TabBar({ active, onTab }: TabBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    justifyContent: 'space-between',
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    gap: 3,
-  },
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    marginTop: -14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.yellow,
-    shadowColor: colors.yellow,
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-  label: {
-    fontSize: 10,
-    letterSpacing: 0.1,
-  },
-});
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    bar: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      justifyContent: 'space-between',
+      gap: 4,
+      paddingHorizontal: 14,
+      paddingTop: 8,
+      backgroundColor: colors.surface,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
+    tab: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 6,
+      gap: 3,
+    },
+    fab: {
+      width: 56,
+      height: 56,
+      borderRadius: 18,
+      marginTop: -14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.yellow,
+      shadowColor: colors.yellow,
+      shadowOpacity: 0.5,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
+    },
+    label: {
+      fontSize: 10,
+      letterSpacing: 0.1,
+    },
+  });

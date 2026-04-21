@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
-import { colors, fonts, radii } from '../tokens';
+import { fonts, radii, useColors } from '../tokens';
 
 interface PillProps {
   children: React.ReactNode;
@@ -9,13 +9,16 @@ interface PillProps {
   testID?: string;
 }
 
-export function Pill({ children, bg = colors.lineSoft, color = colors.textDim, style, testID }: PillProps) {
+export function Pill({ children, bg, color, style, testID }: PillProps) {
+  const colors = useColors();
+  const resolvedBg = bg ?? colors.lineSoft;
+  const resolvedColor = color ?? colors.textDim;
   return (
     <View
       testID={testID}
-      style={[styles.container, { backgroundColor: bg }, style]}
+      style={[styles.container, { backgroundColor: resolvedBg }, style]}
     >
-      <Text style={[styles.label, { color }]}>{children}</Text>
+      <Text style={[styles.label, { color: resolvedColor }]}>{children}</Text>
     </View>
   );
 }

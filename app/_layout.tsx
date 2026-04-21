@@ -55,7 +55,14 @@ function RootGate() {
     const top = segments[0];
     const inAuth = top === '(auth)';
     const inOnboarding = top === '(onboarding)';
-    const inApp = top === '(tabs)' || top === 'new-job' || top === undefined;
+    const IN_APP_SEGMENTS: (string | undefined)[] = [
+      '(tabs)',
+      'new-job',
+      'jobs',
+      'day',
+      undefined,
+    ];
+    const inApp = IN_APP_SEGMENTS.includes(top);
 
     if (authStatus === 'signed-in') {
       if (!inApp) router.replace('/(tabs)');
@@ -74,6 +81,9 @@ function RootGate() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(onboarding)" />
       <Stack.Screen name="new-job" options={{ presentation: 'modal', title: 'New job' }} />
+      <Stack.Screen name="jobs/[id]/index" />
+      <Stack.Screen name="jobs/[id]/edit" options={{ presentation: 'modal', title: 'Edit job' }} />
+      <Stack.Screen name="day/[date]" />
     </Stack>
   );
 }

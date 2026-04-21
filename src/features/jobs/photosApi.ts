@@ -1,4 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  manipulateAsync,
+  SaveFormat,
+  type ImageResult,
+} from 'expo-image-manipulator';
 import { getSupabaseClient } from '../../lib/supabase';
 import type { StagedPhoto } from '../../components/form/PhotoGrid';
 
@@ -14,18 +19,35 @@ export interface PhotoRow {
   height: number | null;
   ai_description: string | null;
   ai_tags: string[];
+  blurhash: string | null;
   status: PhotoStatus;
   error: string | null;
   created_at: string;
   updated_at: string;
 }
 
-function extensionFor(mime: string): string {
-  if (mime.includes('png')) return 'png';
-  if (mime.includes('webp')) return 'webp';
-  if (mime.includes('heic')) return 'heic';
-  if (mime.includes('heif')) return 'heif';
-  return 'jpg';
+// Upload-time resize — caps the longest side and re-encodes as JPEG so any
+// HEIC from iOS also becomes a universal JPEG on the server.
+const MAX_DIMENSION = 1600;
+const JPEG_QUALITY = 0.8;
+
+async function resizeForUpload(photo: StagedPhoto): Promise<ImageResult> {
+  const w = photo.width || 0;
+  const h = photo.height || 0;
+  const longest = Math.max(w, h);
+  const actions =
+    longest > MAX_DIMENSION
+      ? [
+          {
+            resize:
+              w >= h ? { width: MAX_DIMENSION } : { height: MAX_DIMENSION },
+          },
+        ]
+      : [];
+  return manipulateAsync(photo.uri, actions, {
+    compress: JPEG_QUALITY,
+    format: SaveFormat.JPEG,
+  });
 }
 
 export async function uploadAndInsertPhoto(params: {
@@ -35,18 +57,19 @@ export async function uploadAndInsertPhoto(params: {
   client?: SupabaseClient;
 }): Promise<PhotoRow> {
   const client = params.client ?? getSupabaseClient();
-  const ext = extensionFor(params.photo.mimeType);
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const processed = await resizeForUpload(params.photo);
+  const mimeType = 'image/jpeg';
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const storagePath = `${params.userId}/${params.jobId}/${filename}`;
 
-  const fileRes = await fetch(params.photo.uri);
+  const fileRes = await fetch(processed.uri);
   const bytes = await fileRes.arrayBuffer();
   if (!bytes.byteLength) throw new Error('photo produced empty file');
 
   const { error: upErr } = await client.storage
     .from('job-photos')
     .upload(storagePath, bytes, {
-      contentType: params.photo.mimeType,
+      contentType: mimeType,
       upsert: false,
     });
   if (upErr) throw new Error(`photo upload failed: ${upErr.message}`);
@@ -56,9 +79,9 @@ export async function uploadAndInsertPhoto(params: {
     .insert({
       job_id: params.jobId,
       storage_path: storagePath,
-      mime_type: params.photo.mimeType,
-      width: params.photo.width || null,
-      height: params.photo.height || null,
+      mime_type: mimeType,
+      width: processed.width || params.photo.width || null,
+      height: processed.height || params.photo.height || null,
     })
     .select('*')
     .single();

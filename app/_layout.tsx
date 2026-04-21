@@ -12,6 +12,7 @@ import {
   useOnboarding,
 } from '../src/features/onboarding/OnboardingContext';
 import { FONT_MAP } from '../src/features/splash/fonts';
+import { ThemeProvider, useTheme } from '../src/features/theme/ThemeProvider';
 import { getSupabaseClient } from '../src/lib/supabase';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -29,19 +30,27 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider client={getSupabaseClient()}>
-        <OnboardingProvider>
-          <RootGate />
-          <StatusBar style="dark" translucent />
-        </OnboardingProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider client={getSupabaseClient()}>
+          <OnboardingProvider>
+            <RootGate />
+            <ThemedStatusBar />
+          </OnboardingProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
+}
+
+function ThemedStatusBar() {
+  const { scheme } = useTheme();
+  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} translucent />;
 }
 
 function RootGate() {
   const { status: authStatus } = useAuth();
   const { status: onboardingStatus } = useOnboarding();
+  const { colors } = useTheme();
   const router = useRouter();
   const segments = useSegments() as string[];
 
@@ -76,7 +85,7 @@ function RootGate() {
   }, [authStatus, onboardingStatus, segments, router, hide]);
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F7F6F2' } }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(onboarding)" />

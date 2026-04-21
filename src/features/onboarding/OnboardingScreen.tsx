@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     letterSpacing: -0.8,
-    color: colors.darkText,
+    color: '#F3F2EE',
   },
   body: {
     fontFamily: fonts.sans,
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   skipText: {
     fontFamily: fonts.sansMedium,
     fontSize: 14,
-    color: colors.darkMute,
+    color: '#8A8679',
   },
   footerHint: {
     alignSelf: 'center',
@@ -232,6 +232,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     textAlign: 'center',
-    color: colors.darkMute,
+    color: '#8A8679',
   },
 });

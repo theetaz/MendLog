@@ -36,14 +36,12 @@ describe('ContributionGrid', () => {
     expect(onCellTap).toHaveBeenCalledWith(data[3]);
   });
 
-  it('renders weekday labels in the full variant only', () => {
+  it('renders the same number of cells in compact and full variants', () => {
     const data = genActivity(4, REFERENCE);
     const { rerender } = render(<ContributionGrid data={data} variant="full" />);
-    expect(screen.getByText('Mon')).toBeTruthy();
-    expect(screen.getByText('Wed')).toBeTruthy();
-    expect(screen.getByText('Fri')).toBeTruthy();
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(data.length);
 
     rerender(<ContributionGrid data={data} variant="compact" />);
-    expect(screen.queryByText('Mon')).toBeNull();
+    expect(screen.getAllByTestId(/^cell-/)).toHaveLength(data.length);
   });
 });

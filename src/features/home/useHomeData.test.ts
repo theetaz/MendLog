@@ -25,11 +25,11 @@ describe('useHomeData', () => {
     expect(ids).toEqual([125, 126, 127]);
   });
 
-  it('loads 12 weeks of activity', async () => {
+  it('loads 16 weeks of activity (covers last 3 months + spillover)', async () => {
     const repo = makeRepo();
     const { result } = renderHook(() => useHomeData(repo, CLOCK));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.activity).toHaveLength(84);
+    expect(result.current.activity).toHaveLength(16 * 7);
   });
 
   it('computes this-week count (jobs in the 7 days up to today)', async () => {
@@ -59,6 +59,7 @@ describe('useHomeData', () => {
   it('captures errors from the repository', async () => {
     const repo = {
       listJobs: jest.fn().mockRejectedValue(new Error('boom')),
+      listJobsForDate: jest.fn().mockResolvedValue([]),
       getJob: jest.fn(),
       getActivity: jest.fn().mockResolvedValue([]),
     };

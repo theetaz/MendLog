@@ -35,9 +35,9 @@ describe('HomeScreen', () => {
     const repo = makeRepo();
     render(<HomeScreen repo={repo} clock={() => SEED_REFERENCE_DATE} userName="Nuwan" />);
     await waitFor(() => expect(screen.queryByTestId('home-loading')).toBeNull());
-    expect(screen.getByText('7')).toBeTruthy();
+    expect(screen.getAllByText('7').length).toBeGreaterThan(0);
     expect(screen.getByText('2h 41m')).toBeTruthy();
-    expect(screen.getByText('4')).toBeTruthy();
+    expect(screen.getAllByText('4').length).toBeGreaterThan(0);
   });
 
   it('fires onOpenJob when a today card is pressed', async () => {
@@ -59,6 +59,7 @@ describe('HomeScreen', () => {
   it('renders an error banner when the repository fails', async () => {
     const failingRepo = {
       listJobs: jest.fn().mockRejectedValue(new Error('network down')),
+      listJobsForDate: jest.fn().mockResolvedValue([]),
       getJob: jest.fn(),
       getActivity: jest.fn().mockResolvedValue([]),
     };

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ActivityDay, Job } from '../../types/job';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import { formatIdle } from '../../utils/idle';
@@ -11,9 +11,10 @@ export interface HomeData {
   streak: number;
   loading: boolean;
   error: Error | null;
+  reload(): void;
 }
 
-const EMPTY: Omit<HomeData, 'loading' | 'error'> = {
+const EMPTY: Omit<HomeData, 'loading' | 'error' | 'reload'> = {
   today: [],
   activity: [],
   thisWeekCount: 0,
@@ -46,7 +47,14 @@ export function useHomeData(
   repo: JobsRepository,
   clock: () => Date = () => new Date(),
 ): HomeData {
-  const [state, setState] = useState<HomeData>({ ...EMPTY, loading: true, error: null });
+  const [tick, setTick] = useState(0);
+  const [state, setState] = useState<Omit<HomeData, 'reload'>>({
+    ...EMPTY,
+    loading: true,
+    error: null,
+  });
+
+  const reload = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +63,9 @@ export function useHomeData(
 
     (async () => {
       try {
-        const [jobs, activity] = await Promise.all([repo.listJobs(), repo.getActivity(12)]);
+        // 16 weeks ≈ 3.7 months — covers the current calendar month + last two
+        // plus spillover cells on either end of the month grids.
+        const [jobs, activity] = await Promise.all([repo.listJobs(), repo.getActivity(16)]);
         if (cancelled) return;
 
         const today = jobs.filter((j) => j.date === todayIso);
@@ -88,7 +98,7 @@ export function useHomeData(
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repo]);
+  }, [repo, tick]);
 
-  return state;
+  return { ...state, reload };
 }

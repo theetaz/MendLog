@@ -1,5 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, fonts } from '../design/tokens';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { colors } from '../design/tokens';
 import type { ActivityDay } from '../types/job';
 import { heatColor } from '../utils/heat';
 
@@ -11,8 +11,6 @@ interface ContributionGridProps {
   onCellTap?: (day: ActivityDay) => void;
 }
 
-const WEEKDAY_LABELS = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
-
 function chunkByWeeks(days: ActivityDay[]): ActivityDay[][] {
   const weeks: ActivityDay[][] = [];
   for (let i = 0; i < days.length; i += 7) {
@@ -23,64 +21,57 @@ function chunkByWeeks(days: ActivityDay[]): ActivityDay[][] {
 
 export function ContributionGrid({ data, variant = 'compact', onCellTap }: ContributionGridProps) {
   const weeks = chunkByWeeks(data);
-  const cellSize = variant === 'full' ? 11 : 12;
-  const gap = 3;
+  // compact = fixed-size cells (used in small tiles); full = fills parent width
+  const compact = variant === 'compact';
+  const gap = compact ? 3 : 2;
+  const fixedCell = compact ? 12 : undefined;
 
   return (
-    <View>
-      <View style={styles.row}>
-        {variant === 'full' && (
-          <View style={[styles.weekdayColumn, { gap }]}>
-            {WEEKDAY_LABELS.map((label, idx) => (
-              <Text key={idx} style={[styles.weekdayLabel, { height: cellSize }]}>
-                {label}
-              </Text>
-            ))}
-          </View>
-        )}
-        <View style={[styles.grid, { gap }]}>
-          {weeks.map((week, wi) => (
-            <View key={`week-${wi}`} style={[styles.column, { gap }]}>
-              {week.map((day) => {
-                const cellStyle = [
-                  styles.cell,
-                  { width: cellSize, height: cellSize, backgroundColor: heatColor(day.count) },
-                ];
-                if (!onCellTap) {
-                  return <View key={day.date} testID={`cell-${day.date}`} style={cellStyle} />;
-                }
-                return (
-                  <Pressable
-                    key={day.date}
-                    testID={`cell-${day.date}`}
-                    onPress={() => onCellTap(day)}
-                    style={cellStyle}
-                  />
-                );
-              })}
-            </View>
-          ))}
+    <View style={styles.grid}>
+      {weeks.map((week, wi) => (
+        <View
+          key={`week-${wi}`}
+          style={[
+            compact ? styles.column : styles.columnFlex,
+            { gap, marginLeft: wi === 0 ? 0 : gap },
+          ]}
+        >
+          {week.map((day) => {
+            const cellStyle = [
+              compact
+                ? { width: fixedCell, height: fixedCell, borderRadius: 3 }
+                : styles.cellFlex,
+              { backgroundColor: heatColor(day.count) },
+            ];
+            if (!onCellTap) {
+              return <View key={day.date} testID={`cell-${day.date}`} style={cellStyle} />;
+            }
+            return (
+              <Pressable
+                key={day.date}
+                testID={`cell-${day.date}`}
+                onPress={() => onCellTap(day)}
+                hitSlop={4}
+                style={cellStyle}
+              />
+            );
+          })}
         </View>
-      </View>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row' },
-  weekdayColumn: {
-    flexDirection: 'column',
-    marginRight: 4,
-    width: 22,
-    paddingTop: 2,
-  },
-  weekdayLabel: {
-    fontFamily: fonts.sansSemiBold,
-    fontSize: 9,
-    color: colors.mute,
-    letterSpacing: 0.3,
-  },
-  grid: { flexDirection: 'row' },
+  grid: { flexDirection: 'row', width: '100%' },
   column: { flexDirection: 'column' },
-  cell: { borderRadius: 3 },
+  columnFlex: { flexDirection: 'column', flex: 1 },
+  cellFlex: {
+    aspectRatio: 1,
+    borderRadius: 2,
+    width: '100%',
+    minHeight: 2,
+  },
 });
+
+export const __heatColorForTests = heatColor;

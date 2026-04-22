@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppBar, Btn, Icon, LangBadge, Pill, SectionLabel } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
+import { formatJobId } from '../../utils/formatId';
 import { formatIdle } from '../../utils/idle';
 import { statusTone } from '../../components/jobStatus';
 import type { ClipWithUrl, JobDetail, PhotoWithUrl } from './jobsApi';
@@ -90,7 +91,7 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
   return (
     <View style={styles.container}>
       <AppBar
-        title={detail?.job ? `Job #${detail.job.id}` : 'Job'}
+        title={detail?.job ? `Job #${formatJobId(detail.job.id)}` : 'Job'}
         left={
           <Pressable onPress={onBack} hitSlop={10}>
             <Icon name="x" size={22} color={colors.text} weight={2} />
@@ -202,7 +203,7 @@ function JobHeader({ detail, styles }: { detail: JobDetail; styles: ReturnType<t
         </Pill>
         <LangBadge lang={detail.job.lang} />
         <View style={styles.spacer} />
-        <Text style={styles.headerId}>#{detail.job.id}</Text>
+        <Text style={styles.headerId}>#{formatJobId(detail.job.id)}</Text>
       </View>
       <Text style={styles.headerMachine}>{detail.job.machine}</Text>
       <Text style={styles.headerMeta}>

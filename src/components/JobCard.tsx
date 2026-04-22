@@ -5,6 +5,7 @@ import { Icon } from '../design/components/Icon';
 import { LangBadge } from '../design/components/LangBadge';
 import { Pill } from '../design/components/Pill';
 import type { Job } from '../types/job';
+import { formatJobId } from '../utils/formatId';
 import { formatIdle } from '../utils/idle';
 import { type AvatarPhoto, JobAvatar } from './JobAvatar';
 import { statusTone } from './jobStatus';
@@ -48,7 +49,7 @@ export function JobCard({ job, variant = 'full', photos, onPress, testID }: JobC
         />
         <View style={styles.compactBody}>
           <View style={styles.compactHeader}>
-            <Text style={styles.compactId}>#{job.id}</Text>
+            <Text style={styles.compactId}>#{formatJobId(job.id)}</Text>
             <LangBadge lang={job.lang} />
             <View style={styles.compactStatus}>
               <Pill bg={tone.bg} color={tone.fg}>
@@ -92,7 +93,7 @@ export function JobCard({ job, variant = 'full', photos, onPress, testID }: JobC
     <Pressable testID={testID} onPress={onPress} style={styles.fullCard}>
       <View style={styles.fullBody}>
         <View style={styles.fullHeader}>
-          <Text style={styles.fullId}>#{job.id}</Text>
+          <Text style={styles.fullId}>#{formatJobId(job.id)}</Text>
           <Pill bg={tone.bg} color={tone.fg}>
             {tone.label}
           </Pill>

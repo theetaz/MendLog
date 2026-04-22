@@ -28,6 +28,7 @@ import {
 import { AppBar, Btn, Icon, SectionLabel } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { Job, JobStatus } from '../../types/job';
+import { formatJobId } from '../../utils/formatId';
 import { STATUS_OPTIONS, statusOption } from './statusOptions';
 import { useCatalog } from '../catalog/useCatalog';
 import type { ClipRow } from './clipsApi';
@@ -335,7 +336,7 @@ export function JobEditScreen({
   return (
     <View style={styles.container}>
       <AppBar
-        title={`Edit job #${jobId}`}
+        title={`Edit job #${formatJobId(jobId)}`}
         left={
           <Pressable onPress={handleCancel} hitSlop={10}>
             <Icon name="x" size={22} color={colors.text} weight={2} />
@@ -545,7 +546,7 @@ function LoadingShell({ jobId, onClose, styles, colors }: { jobId: string; onClo
   return (
     <View style={styles.container}>
       <AppBar
-        title={`Edit job #${jobId}`}
+        title={`Edit job #${formatJobId(jobId)}`}
         left={
           <Pressable onPress={onClose} hitSlop={10}>
             <Icon name="x" size={22} color={colors.text} weight={2} />

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { db } from '../db';
 import { job_clips, jobs } from '../schema';
+import { getMetaNumber, setMetaNumber } from './meta';
 import { toMs } from './time';
 
 // Push clip rows whose audio has uploaded. `job_id` is nullable on the server
@@ -50,14 +51,20 @@ export async function pushClips(client: SupabaseClient): Promise<void> {
           .select('id, updated_at')
           .single();
         if (error) throw new Error(error.message);
+        const clipServerId = data.id as number;
         await db
           .update(job_clips)
           .set({
-            server_id: data.id as number,
+            server_id: clipServerId,
             sync_state: 'synced',
             updated_at: toMs(data.updated_at as string),
           })
           .where(eq(job_clips.id, row.id));
+        // Kick off transcription server-side. Fire-and-forget — pullClips
+        // picks up the eventual transcript fields regardless.
+        client.functions
+          .invoke('transcribe-clip', { body: { clip_id: clipServerId } })
+          .catch((e) => console.warn('transcribe-clip invoke failed:', e));
       } else {
         const { data, error } = await client
           .from('job_clips')
@@ -80,5 +87,60 @@ export async function pushClips(client: SupabaseClient): Promise<void> {
     }
   }
 
-  // TODO(offline-first): pullClips — merge server-side transcripts back.
+}
+
+// Pull clip updates — primarily the transcripts written by the
+// `transcribe-clip` edge function after the audio uploads.
+export async function pullClips(client: SupabaseClient, userId: string): Promise<void> {
+  const cursorMs = await getMetaNumber('clips.last_pulled_at');
+  const cursorIso = new Date(cursorMs).toISOString();
+
+  const { data, error } = await client
+    .from('job_clips')
+    .select(
+      'id, audio_path, transcript_raw, transcript_clean, transcript_en_raw, transcript_en_clean, status, error, updated_at',
+    )
+    .eq('user_id', userId)
+    .gt('updated_at', cursorIso)
+    .order('updated_at', { ascending: true })
+    .limit(500);
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) return;
+
+  let maxUpdated = cursorMs;
+  for (const remote of data as Record<string, unknown>[]) {
+    const serverId = remote.id as number;
+    const remoteMs = toMs(remote.updated_at as string);
+    if (remoteMs > maxUpdated) maxUpdated = remoteMs;
+
+    const existing = await db
+      .select()
+      .from(job_clips)
+      .where(eq(job_clips.server_id, serverId))
+      .limit(1);
+    if (existing.length === 0) continue;
+
+    const local = existing[0];
+    if (local.sync_state !== 'synced' && remoteMs <= local.updated_at) continue;
+
+    await db
+      .update(job_clips)
+      .set({
+        audio_path:
+          typeof remote.audio_path === 'string' ? (remote.audio_path as string) : local.audio_path,
+        transcript_raw: (remote.transcript_raw as string | null) ?? local.transcript_raw,
+        transcript_clean: (remote.transcript_clean as string | null) ?? local.transcript_clean,
+        transcript_en_raw:
+          (remote.transcript_en_raw as string | null) ?? local.transcript_en_raw,
+        transcript_en_clean:
+          (remote.transcript_en_clean as string | null) ?? local.transcript_en_clean,
+        status: (remote.status as string) ?? local.status,
+        error: (remote.error as string | null) ?? local.error,
+        updated_at: remoteMs,
+        sync_state: local.sync_state === 'synced' ? 'synced' : local.sync_state,
+      })
+      .where(eq(job_clips.id, local.id));
+  }
+
+  await setMetaNumber('clips.last_pulled_at', maxUpdated);
 }

@@ -5,10 +5,10 @@ import { notifyLocalDataChanged } from '../dataBus';
 import { errorMessage } from '../errors';
 import { job_clips, job_photos, jobs } from '../schema';
 import { pullCatalog } from './catalog';
-import { pushClips } from './clips';
+import { pullClips, pushClips } from './clips';
 import { pullJobs, pushJobs } from './jobs';
 import { getMetaNumber } from './meta';
-import { pushPhotos } from './photos';
+import { pullPhotos, pushPhotos } from './photos';
 import { drainClipUploads, drainPhotoUploads, pendingUploadCount } from './uploadQueue';
 
 export interface SyncCounts {
@@ -41,6 +41,12 @@ export async function runDataSync(
     await pushPhotos(client);
     await pushClips(client);
     await pullJobs(client, userId, { full: opts.full });
+    // Pull the server-side-populated fields (AI descriptions/tags, clip
+    // transcripts). Runs last so any server work triggered during push
+    // (annotate-photo, transcribe-clip) has a chance to complete before
+    // our cursor advances. Callers that need the latest can re-trigger.
+    await pullPhotos(client, userId);
+    await pullClips(client, userId);
     notifyLocalDataChanged();
     return { ok: true, durationMs: Date.now() - started };
   } catch (e) {

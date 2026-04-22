@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Pressable,
   RefreshControl,
@@ -19,6 +20,7 @@ import { formatIdle } from '../../utils/idle';
 import { statusTone } from '../../components/jobStatus';
 import type { ClipWithUrl, JobDetail, PhotoWithUrl } from './jobsApi';
 import { fetchJobDetail } from './jobsApi';
+import { generateAndShareReport } from './reportPdf';
 
 interface JobDetailScreenProps {
   jobId: number;
@@ -34,6 +36,22 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = useCallback(async () => {
+    if (!detail || downloading) return;
+    setDownloading(true);
+    try {
+      await generateAndShareReport(detail);
+    } catch (e) {
+      Alert.alert(
+        'Could not generate report',
+        e instanceof Error ? e.message : 'Unknown error',
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }, [detail, downloading]);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -145,6 +163,17 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
           <LongField label="Root cause" value={detail.job.rootCause} styles={styles} />
           <LongField label="Corrective action" value={detail.job.action} styles={styles} />
           <LongField label="Remarks" value={detail.job.remarks} styles={styles} />
+
+          <Btn
+            kind="primary"
+            size="lg"
+            block
+            onPress={handleDownload}
+            disabled={downloading}
+            testID="job-detail-download"
+          >
+            {downloading ? 'Preparing report…' : 'Download report'}
+          </Btn>
 
           {onEdit && (
             <Btn

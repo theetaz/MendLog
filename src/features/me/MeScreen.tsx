@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +26,7 @@ interface MeScreenProps {
   repo?: JobsRepository | null;
   onSignOut(): Promise<void> | void;
   onOpenJobs?(): void;
+  onUpdateDisplayName?(name: string): Promise<void>;
   confirmSignOut?: (onConfirm: () => void) => void;
 }
 
@@ -54,6 +56,7 @@ export function MeScreen({
   repo,
   onSignOut,
   onOpenJobs,
+  onUpdateDisplayName,
   confirmSignOut = defaultConfirm,
 }: MeScreenProps) {
   const colors = useColors();
@@ -61,8 +64,50 @@ export function MeScreen({
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(displayName ?? '');
+  const [savingName, setSavingName] = useState(false);
   const data = useProfileData(repo ?? null);
   const { mode, setMode } = useTheme();
+
+  useEffect(() => {
+    if (!editingName) setNameDraft(displayName ?? '');
+  }, [displayName, editingName]);
+
+  const startEditName = useCallback(() => {
+    setNameDraft(displayName ?? '');
+    setEditingName(true);
+  }, [displayName]);
+
+  const cancelEditName = useCallback(() => {
+    setEditingName(false);
+    setNameDraft(displayName ?? '');
+  }, [displayName]);
+
+  const saveEditName = useCallback(async () => {
+    if (!onUpdateDisplayName || savingName) return;
+    const next = nameDraft.trim();
+    if (!next) {
+      Alert.alert('Name required', 'Please enter a name.');
+      return;
+    }
+    if (next === (displayName ?? '').trim()) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      await onUpdateDisplayName(next);
+      setEditingName(false);
+    } catch (e) {
+      Alert.alert(
+        'Could not update name',
+        e instanceof Error ? e.message : 'Unknown error',
+      );
+    } finally {
+      setSavingName(false);
+    }
+  }, [displayName, nameDraft, onUpdateDisplayName, savingName]);
 
   useFocusEffect(
     useCallback(() => {
@@ -116,9 +161,62 @@ export function MeScreen({
             <Text style={styles.avatarText}>{avatarInitial(displayName, email)}</Text>
           </View>
           <View style={styles.profileText}>
-            <Text style={styles.name} numberOfLines={1}>
-              {displayName ?? 'Technician'}
-            </Text>
+            {editingName ? (
+              <View style={styles.nameEditRow}>
+                <TextInput
+                  value={nameDraft}
+                  onChangeText={setNameDraft}
+                  style={styles.nameInput}
+                  autoFocus
+                  maxLength={60}
+                  placeholder="Your name"
+                  placeholderTextColor={colors.mute}
+                  editable={!savingName}
+                  selectTextOnFocus
+                  returnKeyType="done"
+                  onSubmitEditing={saveEditName}
+                  testID="me-name-input"
+                />
+                <Pressable
+                  onPress={cancelEditName}
+                  disabled={savingName}
+                  hitSlop={8}
+                  style={styles.nameIconBtn}
+                  testID="me-name-cancel"
+                >
+                  <Icon name="x" size={18} color={colors.mute} weight={2} />
+                </Pressable>
+                <Pressable
+                  onPress={saveEditName}
+                  disabled={savingName}
+                  hitSlop={8}
+                  style={styles.nameIconBtn}
+                  testID="me-name-save"
+                >
+                  {savingName ? (
+                    <ActivityIndicator size="small" color={colors.navy} />
+                  ) : (
+                    <Icon name="check" size={18} color={colors.navy} weight={2} />
+                  )}
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {displayName ?? 'Technician'}
+                </Text>
+                {onUpdateDisplayName && (
+                  <Pressable
+                    onPress={startEditName}
+                    hitSlop={8}
+                    style={styles.nameIconBtn}
+                    testID="me-edit-name"
+                  >
+                    <Icon name="edit" size={16} color={colors.mute} weight={1.8} />
+                  </Pressable>
+                )}
+              </View>
+            )}
             <Text style={styles.email} numberOfLines={1}>
               {email ?? 'No email on this session'}
             </Text>
@@ -329,7 +427,35 @@ const makeStyles = (colors: ThemeColors) =>
       color: '#fff',
     },
     profileText: { flex: 1, minWidth: 0, gap: 2 },
+    nameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    nameEditRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    nameInput: {
+      flex: 1,
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 18,
+      letterSpacing: -0.4,
+      color: colors.text,
+      paddingVertical: 2,
+      paddingHorizontal: 0,
+      margin: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.navy,
+    },
+    nameIconBtn: {
+      padding: 4,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     name: {
+      flex: 1,
       fontFamily: fonts.sansSemiBold,
       fontSize: 18,
       letterSpacing: -0.4,

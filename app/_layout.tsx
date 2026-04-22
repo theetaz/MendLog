@@ -2,7 +2,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
 
@@ -11,6 +11,7 @@ import {
   OnboardingProvider,
   useOnboarding,
 } from '../src/features/onboarding/OnboardingContext';
+import { AnimatedSplash } from '../src/features/splash/AnimatedSplash';
 import { FONT_MAP } from '../src/features/splash/fonts';
 import { ThemeProvider, useTheme } from '../src/features/theme/ThemeProvider';
 import { getSupabaseClient } from '../src/lib/supabase';
@@ -25,6 +26,7 @@ export const unstable_settings = {
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(FONT_MAP);
   const fontsReady = fontsLoaded || !!fontError;
+  const [splashDone, setSplashDone] = useState(false);
 
   if (!fontsReady) return null;
 
@@ -35,6 +37,7 @@ export default function RootLayout() {
           <OnboardingProvider>
             <RootGate />
             <ThemedStatusBar />
+            {!splashDone && <AnimatedSplash onFinish={() => setSplashDone(true)} />}
           </OnboardingProvider>
         </AuthProvider>
       </ThemeProvider>

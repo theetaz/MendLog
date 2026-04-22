@@ -45,11 +45,11 @@ import { invokeAnnotatePhoto, uploadAndInsertPhoto } from './photosApi';
 import { useVoiceNoteRecorder } from './useVoiceNoteRecorder';
 
 interface JobEditScreenProps {
-  jobId: number;
+  jobId: string;
   userId: string;
   onClose(): void;
-  onSaved?(jobId: number): void;
-  onDeleted?(jobId: number): void;
+  onSaved?(jobId: string): void;
+  onDeleted?(jobId: string): void;
 }
 
 interface FormState {
@@ -552,7 +552,7 @@ export function JobEditScreen({
   );
 }
 
-function LoadingShell({ jobId, onClose, styles, colors }: { jobId: number; onClose(): void; styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
+function LoadingShell({ jobId, onClose, styles, colors }: { jobId: string; onClose(): void; styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
   return (
     <View style={styles.container}>
       <AppBar

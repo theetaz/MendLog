@@ -3,7 +3,10 @@ export type JobStatus = 'open' | 'awaiting-tl' | 'complete';
 export type Lang = 'en' | 'si';
 
 export interface Job {
-  id: number;
+  // Local UUID for offline-created rows; stringified bigserial for rows
+  // sourced from Supabase. Screens pass it through opaquely — only the
+  // sync layer cares that both forms can coexist.
+  id: string;
   machine: string;
   dept: string;
   inv: string;

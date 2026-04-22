@@ -30,7 +30,7 @@ export class InMemoryJobsRepository implements JobsRepository {
     return { jobs: slice, hasMore: offset + limit < filtered.length };
   }
 
-  async getJob(id: number): Promise<Job | null> {
+  async getJob(id: string): Promise<Job | null> {
     return this.jobs.find((job) => job.id === id) ?? null;
   }
 

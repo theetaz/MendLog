@@ -21,7 +21,7 @@ interface HomeScreenProps {
   repo: JobsRepository;
   userName: string;
   clock?: () => Date;
-  onOpenJob?: (id: number) => void;
+  onOpenJob?: (id: string) => void;
   onOpenDay?: (date: string) => void;
 }
 

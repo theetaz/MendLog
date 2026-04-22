@@ -23,9 +23,9 @@ import { fetchJobDetail } from './jobsApi';
 import { generateAndShareReport } from './reportPdf';
 
 interface JobDetailScreenProps {
-  jobId: number;
+  jobId: string;
   onBack(): void;
-  onEdit?(jobId: number): void;
+  onEdit?(jobId: string): void;
 }
 
 export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps) {

@@ -25,12 +25,12 @@ describe('InMemoryJobsRepository', () => {
 
   describe('getJob', () => {
     it('returns the matching job', async () => {
-      const job = await repo.getJob(127);
+      const job = await repo.getJob('127');
       expect(job?.machine).toBe('Injection Molder #3');
     });
 
     it('returns null when the id is unknown', async () => {
-      const job = await repo.getJob(9999);
+      const job = await repo.getJob('9999');
       expect(job).toBeNull();
     });
   });

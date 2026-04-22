@@ -51,14 +51,14 @@ describe('SupabaseJobsRepository', () => {
   it('getJob returns null when no row is found', async () => {
     const client = fakeSupabase([]);
     const repo = new SupabaseJobsRepository(client);
-    const job = await repo.getJob(999);
+    const job = await repo.getJob('999');
     expect(job).toBeNull();
   });
 
   it('getJob maps a single row when found', async () => {
     const client = fakeSupabase([ROW]);
     const repo = new SupabaseJobsRepository(client);
-    const job = await repo.getJob(127);
+    const job = await repo.getJob('127');
     expect(job?.machine).toBe('Injection Molder #3');
   });
 

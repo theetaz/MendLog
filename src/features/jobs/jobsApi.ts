@@ -24,7 +24,7 @@ export interface JobFormPayload {
 }
 
 export interface SavedJob {
-  id: number;
+  id: string;
   photoCount: number;
   clipCount: number;
 }
@@ -81,7 +81,9 @@ export async function saveJob(
     .single();
 
   if (jobErr || !job) throw new Error(`save job failed: ${jobErr?.message ?? 'no row'}`);
-  const jobId = job.id as number;
+  // Job.id is string across the app now; the DB returns a number, stringify
+  // once at the boundary.
+  const jobId = String(job.id);
 
   if (payload.clipIds.length > 0) {
     const { error: linkErr } = await c
@@ -150,7 +152,7 @@ async function signPaths(
 }
 
 export async function deleteJob(
-  jobId: number,
+  jobId: string,
   client?: SupabaseClient,
 ): Promise<void> {
   const c = client ?? getSupabaseClient();
@@ -218,7 +220,7 @@ export async function deleteClip(
 
 export async function linkClipToJob(
   clipId: number,
-  jobId: number,
+  jobId: string,
   client?: SupabaseClient,
 ): Promise<void> {
   const c = client ?? getSupabaseClient();
@@ -241,7 +243,7 @@ export interface JobUpdatePayload {
 }
 
 export async function updateJob(
-  jobId: number,
+  jobId: string,
   payload: JobUpdatePayload,
   client?: SupabaseClient,
 ): Promise<void> {
@@ -267,14 +269,16 @@ export async function updateJob(
 }
 
 export async function fetchJobDetail(
-  id: number,
+  id: string,
   client?: SupabaseClient,
 ): Promise<JobDetail | null> {
   const c = client ?? getSupabaseClient();
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId)) return null; // local-only UUID not on server yet
   const { data, error } = await c
     .from('jobs')
     .select('*, job_photos(*), job_clips(*)')
-    .eq('id', id)
+    .eq('id', numericId)
     .maybeSingle();
   if (error) throw new Error(`job fetch: ${error.message}`);
   if (!data) return null;

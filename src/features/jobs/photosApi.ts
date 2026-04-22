@@ -52,7 +52,7 @@ async function resizeForUpload(photo: StagedPhoto): Promise<ImageResult> {
 
 export async function uploadAndInsertPhoto(params: {
   userId: string;
-  jobId: number;
+  jobId: string;
   photo: StagedPhoto;
   client?: SupabaseClient;
 }): Promise<PhotoRow> {
@@ -115,17 +115,22 @@ export interface PhotoThumb {
  * populate JobAvatar collages without an N+1 request per card.
  */
 export async function fetchPhotoThumbsForJobs(
-  jobIds: number[],
+  jobIds: string[],
   perJobLimit = 4,
   client?: SupabaseClient,
-): Promise<Map<number, PhotoThumb[]>> {
+): Promise<Map<string, PhotoThumb[]>> {
   if (jobIds.length === 0) return new Map();
   const c = client ?? getSupabaseClient();
+
+  // Coerce to numbers for the int FK on the server. Non-numeric (local-only
+  // UUID) ids are skipped — local rows don't exist on the server yet.
+  const numericIds = jobIds.map((id) => Number(id)).filter((n) => Number.isFinite(n));
+  if (numericIds.length === 0) return new Map();
 
   const { data, error } = await c
     .from('job_photos')
     .select('job_id, storage_path, blurhash, created_at')
-    .in('job_id', jobIds)
+    .in('job_id', numericIds)
     .order('created_at', { ascending: true });
   if (error) throw new Error(`photo thumbs fetch: ${error.message}`);
 
@@ -134,12 +139,13 @@ export async function fetchPhotoThumbsForJobs(
     storage_path: string;
     blurhash: string | null;
   }
-  const rowsByJob = new Map<number, Row[]>();
+  const rowsByJob = new Map<string, Row[]>();
   for (const row of (data ?? []) as Row[]) {
-    const list = rowsByJob.get(row.job_id) ?? [];
+    const key = String(row.job_id);
+    const list = rowsByJob.get(key) ?? [];
     if (list.length < perJobLimit) {
       list.push(row);
-      rowsByJob.set(row.job_id, list);
+      rowsByJob.set(key, list);
     }
   }
 
@@ -161,7 +167,7 @@ export async function fetchPhotoThumbsForJobs(
     if (entry.path && entry.signedUrl) urlByPath.set(entry.path, entry.signedUrl);
   }
 
-  const result = new Map<number, PhotoThumb[]>();
+  const result = new Map<string, PhotoThumb[]>();
   for (const [jobId, rows] of rowsByJob) {
     const thumbs: PhotoThumb[] = rows
       .map((r) => {

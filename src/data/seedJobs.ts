@@ -7,7 +7,7 @@ export const SEED_REFERENCE_DATE = new Date('2026-03-15T00:00:00Z');
 
 export const SEED_JOBS: Job[] = [
   {
-    id: 127,
+    id: '127',
     machine: 'Injection Molder #3',
     dept: 'Moulding',
     inv: 'INV-0331',
@@ -25,7 +25,7 @@ export const SEED_JOBS: Job[] = [
     completedAt: null,
   },
   {
-    id: 126,
+    id: '126',
     machine: 'CNC Lathe B-7',
     dept: 'Machining',
     inv: 'INV-0118',
@@ -43,7 +43,7 @@ export const SEED_JOBS: Job[] = [
     completedAt: null,
   },
   {
-    id: 125,
+    id: '125',
     machine: 'Conveyor Line 2',
     dept: 'Packaging',
     inv: 'INV-0207',
@@ -61,7 +61,7 @@ export const SEED_JOBS: Job[] = [
     completedAt: null,
   },
   {
-    id: 124,
+    id: '124',
     machine: 'Hydraulic Press 01',
     dept: 'Moulding',
     inv: 'INV-0044',
@@ -79,7 +79,7 @@ export const SEED_JOBS: Job[] = [
     completedAt: null,
   },
   {
-    id: 123,
+    id: '123',
     machine: 'Packaging Unit #5',
     dept: 'Packaging',
     inv: 'INV-0519',
@@ -97,7 +97,7 @@ export const SEED_JOBS: Job[] = [
     completedAt: null,
   },
   {
-    id: 122,
+    id: '122',
     machine: 'Dye Mixer 04',
     dept: 'Dyeing',
     inv: 'INV-0622',
@@ -115,7 +115,7 @@ export const SEED_JOBS: Job[] = [
     completedAt: null,
   },
   {
-    id: 121,
+    id: '121',
     machine: 'Boiler #2',
     dept: 'Utilities',
     inv: 'INV-0711',

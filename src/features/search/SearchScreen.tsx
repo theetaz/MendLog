@@ -25,7 +25,7 @@ import { useRecentSearches } from './useRecentSearches';
 import { STATUS_OPTIONS } from '../jobs/statusOptions';
 
 interface SearchScreenProps {
-  onOpenJob(id: number): void;
+  onOpenJob(id: string): void;
 }
 
 const DEBOUNCE_MS = 280;

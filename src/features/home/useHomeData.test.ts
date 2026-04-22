@@ -22,7 +22,7 @@ describe('useHomeData', () => {
     const { result } = renderHook(() => useHomeData(repo, CLOCK));
     await waitFor(() => expect(result.current.loading).toBe(false));
     const ids = result.current.today.map((j) => j.id).sort();
-    expect(ids).toEqual([125, 126, 127]);
+    expect(ids).toEqual(['125', '126', '127']);
   });
 
   it('loads 16 weeks of activity (covers last 3 months + spillover)', async () => {

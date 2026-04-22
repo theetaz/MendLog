@@ -65,7 +65,7 @@ type VoiceNoteStage = 'idle' | 'recording' | 'uploading' | 'processing' | 'done'
 interface NewJobScreenProps {
   userId: string;
   onClose(): void;
-  onSaved?(jobId: number): void;
+  onSaved?(jobId: string): void;
 }
 
 interface FormState {

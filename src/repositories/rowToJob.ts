@@ -24,7 +24,7 @@ export interface JobRow {
 
 export function rowToJob(row: JobRow): Job {
   return {
-    id: typeof row.id === 'string' ? parseInt(row.id, 10) : row.id,
+    id: String(row.id),
     machine: row.machine,
     dept: row.dept,
     inv: row.inv ?? '',

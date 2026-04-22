@@ -8,7 +8,7 @@ function job(
   idleMinutes = 30,
 ): Job {
   return {
-    id,
+    id: String(id),
     machine,
     dept,
     inv: `INV-${id}`,

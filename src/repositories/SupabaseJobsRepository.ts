@@ -50,11 +50,15 @@ export class SupabaseJobsRepository implements JobsRepository {
     return { jobs: slice.map(rowToJob), hasMore };
   }
 
-  async getJob(id: number): Promise<Job | null> {
+  async getJob(id: string): Promise<Job | null> {
+    // `id` on the server is bigint. When we fetched it via rowToJob we
+    // stringified it; on lookup, coerce back so the equality check works.
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId)) return null;
     const { data, error } = await this.client
       .from('jobs')
       .select('*')
-      .eq('id', id)
+      .eq('id', numericId)
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;

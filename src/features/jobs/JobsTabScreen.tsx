@@ -25,7 +25,7 @@ type JobsView = 'list' | 'calendar';
 
 interface JobsTabScreenProps {
   repo: JobsRepository;
-  onOpenJob(id: number): void;
+  onOpenJob(id: string): void;
   onOpenDay(dateIso: string): void;
 }
 
@@ -168,7 +168,7 @@ export function JobsTabScreen({ repo, onOpenJob, onOpenDay }: JobsTabScreenProps
 interface SelectedDayListProps {
   selectedDate: string | null;
   jobs: Job[];
-  onOpenJob(id: number): void;
+  onOpenJob(id: string): void;
   onOpenDay(dateIso: string): void;
 }
 

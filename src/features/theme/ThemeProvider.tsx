@@ -12,7 +12,7 @@ import {
   type ColorScheme,
   THEMES,
   type ThemeColors,
-} from '../../design/tokens';
+} from '../../design/palette';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -82,4 +82,12 @@ export function useTheme(): ThemeContextValue {
     };
   }
   return ctx;
+}
+
+/**
+ * Reactive colors hook. Components using this re-render when the theme
+ * changes. Re-exported by `src/design/tokens.ts` for convenience.
+ */
+export function useColors(): ThemeColors {
+  return useTheme().colors;
 }

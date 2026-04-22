@@ -11,6 +11,7 @@ import {
   OnboardingProvider,
   useOnboarding,
 } from '../src/features/onboarding/OnboardingContext';
+import { useOfflineMigrations } from '../src/offline/migrations';
 import { AnimatedSplash } from '../src/features/splash/AnimatedSplash';
 import { FONT_MAP } from '../src/features/splash/fonts';
 import { ThemeProvider, useTheme } from '../src/features/theme/ThemeProvider';
@@ -26,9 +27,18 @@ export const unstable_settings = {
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(FONT_MAP);
   const fontsReady = fontsLoaded || !!fontError;
+  const { success: dbReady, error: dbError } = useOfflineMigrations();
   const [splashDone, setSplashDone] = useState(false);
 
-  if (!fontsReady) return null;
+  // Gate render on both fonts AND local DB being migrated — no screen should
+  // ever query Drizzle against an unmigrated schema. If the migration throws
+  // we log and fall through; the app can still run against Supabase directly
+  // until the offline layer is flipped on for reads.
+  useEffect(() => {
+    if (dbError) console.warn('offline DB migration failed:', dbError.message);
+  }, [dbError]);
+
+  if (!fontsReady || (!dbReady && !dbError)) return null;
 
   return (
     <SafeAreaProvider>

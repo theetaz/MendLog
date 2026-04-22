@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { and, isNotNull, isNull, ne } from 'drizzle-orm';
 import { db } from '../db';
+import { notifyLocalDataChanged } from '../dataBus';
+import { errorMessage } from '../errors';
 import { job_clips, job_photos, jobs } from '../schema';
 import { pullCatalog } from './catalog';
 import { pushClips } from './clips';
@@ -24,9 +26,12 @@ export interface SyncResult {
 
 // Full data sync — user-generated rows (push) then server-side updates (pull).
 // Order matters: children FK to jobs, so parent server_ids must exist first.
+// `full: true` disables the 90-day pull window — used by the "Sync all
+// history" button in the Me screen.
 export async function runDataSync(
   client: SupabaseClient,
   userId: string,
+  opts: { full?: boolean } = {},
 ): Promise<SyncResult> {
   const started = Date.now();
   try {
@@ -35,12 +40,13 @@ export async function runDataSync(
     await drainClipUploads(client);
     await pushPhotos(client);
     await pushClips(client);
-    await pullJobs(client, userId);
+    await pullJobs(client, userId, { full: opts.full });
+    notifyLocalDataChanged();
     return { ok: true, durationMs: Date.now() - started };
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: errorMessage(e),
       durationMs: Date.now() - started,
     };
   }
@@ -56,7 +62,7 @@ export async function runCatalogSync(client: SupabaseClient): Promise<SyncResult
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: errorMessage(e),
       durationMs: Date.now() - started,
     };
   }

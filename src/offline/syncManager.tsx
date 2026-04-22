@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -12,6 +13,7 @@ import {
 import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../features/auth/AuthProvider';
 import { getSupabaseClient } from '../lib/supabase';
+import { subscribeLocalDataChanges } from './dataBus';
 import {
   type SyncCounts,
   type SyncResult,
@@ -21,6 +23,8 @@ import {
   runCatalogSync,
   runDataSync,
 } from './sync';
+
+const AUTO_SYNC_KEY = '@mendlog/auto_sync';
 
 const DEBOUNCE_MS = 30_000;
 
@@ -35,12 +39,15 @@ export interface SyncLane {
 
 export interface SyncContextValue {
   online: boolean;
+  autoSync: boolean;
   data: SyncLane;
   catalog: SyncLane;
   counts: SyncCounts;
   triggerData(): Promise<void>;
   triggerCatalog(): Promise<void>;
   triggerAll(): Promise<void>;
+  triggerFullHistory(): Promise<void>;
+  setAutoSync(next: boolean): void;
 }
 
 const EMPTY_LANE: SyncLane = {
@@ -86,9 +93,24 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
   const userId = session?.user?.id;
 
   const [online, setOnline] = useState(true);
+  const [autoSync, setAutoSyncState] = useState(true);
   const [data, setData] = useState<SyncLane>(EMPTY_LANE);
   const [catalog, setCatalog] = useState<SyncLane>(EMPTY_LANE);
   const [counts, setCounts] = useState<SyncCounts>(EMPTY_COUNTS);
+
+  // Load persisted auto-sync preference once. Default on.
+  useEffect(() => {
+    AsyncStorage.getItem(AUTO_SYNC_KEY)
+      .then((v) => {
+        if (v === 'off') setAutoSyncState(false);
+      })
+      .catch(() => {});
+  }, []);
+
+  const setAutoSync = useCallback((next: boolean) => {
+    setAutoSyncState(next);
+    AsyncStorage.setItem(AUTO_SYNC_KEY, next ? 'on' : 'off').catch(() => {});
+  }, []);
 
   const inFlightData = useRef(false);
   const inFlightCatalog = useRef(false);
@@ -105,20 +127,23 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
     setCatalog((c) => ({ ...c, lastPulledAt: catAt }));
   }, []);
 
-  const runDataLane = useCallback(async () => {
-    if (inFlightData.current || !userId) return;
-    inFlightData.current = true;
-    setData((d) => ({ ...d, status: 'syncing' }));
-    const result = await runDataSync(supabase, userId);
-    inFlightData.current = false;
-    setData((d) => ({
-      ...d,
-      status: result.ok ? 'ok' : 'error',
-      lastResult: result,
-      lastRunAt: Date.now(),
-    }));
-    await refreshMeta();
-  }, [supabase, userId, refreshMeta]);
+  const runDataLane = useCallback(
+    async (opts: { full?: boolean } = {}) => {
+      if (inFlightData.current || !userId) return;
+      inFlightData.current = true;
+      setData((d) => ({ ...d, status: 'syncing' }));
+      const result = await runDataSync(supabase, userId, { full: opts.full });
+      inFlightData.current = false;
+      setData((d) => ({
+        ...d,
+        status: result.ok ? 'ok' : 'error',
+        lastResult: result,
+        lastRunAt: Date.now(),
+      }));
+      await refreshMeta();
+    },
+    [supabase, userId, refreshMeta],
+  );
 
   const runCatalogLane = useCallback(async () => {
     if (inFlightCatalog.current) return;
@@ -155,18 +180,34 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
     await Promise.all([runDataLane(), runCatalogLane()]);
   }, [runDataLane, runCatalogLane]);
 
+  // "Sync all history" — bypass the 90-day window on the next data pull.
+  const triggerFullHistory = useCallback(async () => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    await runDataLane({ full: true });
+  }, [runDataLane]);
+
   const schedule = useCallback(() => {
+    // Auto-sync off → user controls everything via manual triggers. Debounce
+    // becomes a no-op so we don't burn bandwidth silently.
+    if (!autoSync) return;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       void runDataLane();
       void runCatalogLane();
     }, DEBOUNCE_MS);
-  }, [runDataLane, runCatalogLane]);
+  }, [autoSync, runDataLane, runCatalogLane]);
 
   // Initial meta snapshot so the UI has something to show before any sync.
   useEffect(() => {
     void refreshMeta();
   }, [refreshMeta]);
+
+  // Re-read counts after any local mutation — otherwise the sync section
+  // and AppBar dot stay stale until the next sync completes.
+  useEffect(() => subscribeLocalDataChanges(() => void refreshMeta()), [refreshMeta]);
 
   // First-run pull — once auth is ready, kick both lanes immediately so the
   // local DB gets populated without waiting for the 30s debounce. Screens
@@ -217,14 +258,28 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
   const value = useMemo<SyncContextValue>(
     () => ({
       online,
+      autoSync,
       data,
       catalog,
       counts,
       triggerData,
       triggerCatalog,
       triggerAll,
+      triggerFullHistory,
+      setAutoSync,
     }),
-    [online, data, catalog, counts, triggerData, triggerCatalog, triggerAll],
+    [
+      online,
+      autoSync,
+      data,
+      catalog,
+      counts,
+      triggerData,
+      triggerCatalog,
+      triggerAll,
+      triggerFullHistory,
+      setAutoSync,
+    ],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

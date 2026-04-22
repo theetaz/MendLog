@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobCard } from '../../components/JobCard';
 import { AppBar, Icon, SectionLabel } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
+import { subscribeLocalDataChanges } from '../../offline/dataBus';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { Job } from '../../types/job';
 import { CalendarView, countsByDate } from './CalendarView';
@@ -85,6 +86,11 @@ export function JobsTabScreen({ repo, onOpenJob, onOpenDay }: JobsTabScreenProps
       load();
     }, [load]),
   );
+
+  // Listen for local mutations too — modal-based save flows don't always
+  // re-fire useFocusEffect on iOS, so a new offline job would otherwise
+  // not appear until the user manually pulled to refresh.
+  useEffect(() => subscribeLocalDataChanges(() => load()), [load]);
 
   const subtitle = useMemo(
     () => (jobs.length > 0 ? `${jobs.length} total` : undefined),

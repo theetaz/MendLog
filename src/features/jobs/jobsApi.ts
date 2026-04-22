@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { StagedPhoto } from '../../components/form/PhotoGrid';
 import { getSupabaseClient } from '../../lib/supabase';
 import { db } from '../../offline/db';
+import { notifyLocalDataChanged } from '../../offline/dataBus';
 import { job_clips, job_photos, jobs as jobsTable } from '../../offline/schema';
 import { newId } from '../../offline/uuid';
 import type { Job, JobStatus } from '../../types/job';
@@ -100,6 +101,7 @@ export async function saveJob(userId: string, payload: JobFormPayload): Promise<
     });
   }
 
+  notifyLocalDataChanged();
   return {
     id: jobId,
     photoCount: payload.photos.length,
@@ -143,6 +145,7 @@ export async function updateJob(jobId: string, payload: JobUpdatePayload): Promi
     })
     .where(eq(jobsTable.id, jobId));
   void result;
+  notifyLocalDataChanged();
 }
 
 // Soft delete — keeps the tombstone locally until sync drains it. The sync
@@ -154,6 +157,7 @@ export async function deleteJob(jobId: string): Promise<void> {
     .update(jobsTable)
     .set({ sync_state: 'pending_delete', deleted_at: nowMs, updated_at: nowMs })
     .where(eq(jobsTable.id, jobId));
+  notifyLocalDataChanged();
 }
 
 export async function linkClipToJob(clipId: string, jobId: string): Promise<void> {
@@ -161,6 +165,7 @@ export async function linkClipToJob(clipId: string, jobId: string): Promise<void
     .update(job_clips)
     .set({ job_id: jobId, sync_state: 'pending_update', updated_at: Date.now() })
     .where(eq(job_clips.id, clipId));
+  notifyLocalDataChanged();
 }
 
 // Soft delete. The sync engine doesn't yet push pending_delete (TODO) but
@@ -171,6 +176,7 @@ export async function deletePhoto(photoId: string): Promise<void> {
     .update(job_photos)
     .set({ sync_state: 'pending_delete', deleted_at: nowMs, updated_at: nowMs })
     .where(eq(job_photos.id, photoId));
+  notifyLocalDataChanged();
 }
 
 export async function deleteClip(clipId: string): Promise<void> {
@@ -179,6 +185,7 @@ export async function deleteClip(clipId: string): Promise<void> {
     .update(job_clips)
     .set({ sync_state: 'pending_delete', deleted_at: nowMs, updated_at: nowMs })
     .where(eq(job_clips.id, clipId));
+  notifyLocalDataChanged();
 }
 
 // Stage a new photo during an edit. Same shape as the new-job staging path
@@ -204,6 +211,7 @@ export async function addPhotoToJob(
     status: 'pending',
     upload_state: 'pending',
   });
+  notifyLocalDataChanged();
 }
 
 // --- Read path --- //

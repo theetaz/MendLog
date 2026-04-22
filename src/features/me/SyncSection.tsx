@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Icon, Pill, SectionLabel } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import { useOptionalSync, type SyncLane, type SyncStatus } from '../../offline/syncManager';
@@ -35,11 +35,28 @@ export function SyncSection() {
         </Pill>
       </View>
 
+      <View style={styles.autoSyncRow}>
+        <View style={styles.autoSyncText}>
+          <Text style={styles.autoSyncTitle}>Auto-sync</Text>
+          <Text style={styles.autoSyncBlurb}>
+            When on, MendLog syncs in the background whenever you have a
+            connection. Turn off to save bandwidth and sync only from this
+            screen.
+          </Text>
+        </View>
+        <Switch
+          value={sync.autoSync}
+          onValueChange={sync.setAutoSync}
+          trackColor={{ true: colors.navy, false: colors.line }}
+          thumbColor="#fff"
+        />
+      </View>
+
       <LaneCard
         title="Job data"
         subtitle="Your jobs, photos, and voice clips"
         lane={sync.data}
-        pendingSummary={pendingSummary(sync.counts)}
+        counts={sync.counts}
         buttonLabel="Sync now"
         onPress={sync.triggerData}
         disabled={!sync.online || sync.data.status === 'syncing'}
@@ -51,40 +68,55 @@ export function SyncSection() {
         title="Reference data"
         subtitle="Departments & machinery"
         lane={sync.catalog}
-        pendingSummary={null}
+        counts={null}
         buttonLabel="Refresh"
         onPress={sync.triggerCatalog}
         disabled={!sync.online || sync.catalog.status === 'syncing'}
         styles={styles}
         colors={colors}
       />
+
+      <Pressable
+        onPress={() => {
+          if (sync.online && sync.data.status !== 'syncing') void sync.triggerFullHistory();
+        }}
+        disabled={!sync.online || sync.data.status === 'syncing'}
+        style={({ pressed }) => [
+          styles.historyBtn,
+          (!sync.online || sync.data.status === 'syncing') && styles.syncBtnDisabled,
+          pressed && sync.online && styles.pressed,
+        ]}
+      >
+        <Icon
+          name="cloud"
+          size={14}
+          color={sync.online ? colors.muteDeep : colors.mute}
+          weight={2}
+        />
+        <View style={styles.historyBtnText}>
+          <Text style={styles.historyBtnTitle}>Sync all history</Text>
+          <Text style={styles.historyBtnBlurb}>
+            By default we only pull the last 90 days. Tap this to download
+            your full job history — use on Wi-Fi.
+          </Text>
+        </View>
+      </Pressable>
     </>
   );
 }
 
-function pendingSummary(counts: {
+interface Counts {
   pendingJobs: number;
   pendingPhotos: number;
   pendingClips: number;
   pendingUploads: number;
-}): string | null {
-  const parts: string[] = [];
-  if (counts.pendingJobs) parts.push(`${counts.pendingJobs} job${counts.pendingJobs === 1 ? '' : 's'}`);
-  if (counts.pendingUploads)
-    parts.push(`${counts.pendingUploads} upload${counts.pendingUploads === 1 ? '' : 's'}`);
-  if (counts.pendingPhotos + counts.pendingClips && !counts.pendingUploads) {
-    const n = counts.pendingPhotos + counts.pendingClips;
-    parts.push(`${n} row${n === 1 ? '' : 's'}`);
-  }
-  if (parts.length === 0) return null;
-  return `${parts.join(' · ')} pending`;
 }
 
 function LaneCard({
   title,
   subtitle,
   lane,
-  pendingSummary,
+  counts,
   buttonLabel,
   onPress,
   disabled,
@@ -94,7 +126,7 @@ function LaneCard({
   title: string;
   subtitle: string;
   lane: SyncLane;
-  pendingSummary: string | null;
+  counts: Counts | null;
   buttonLabel: string;
   onPress(): void | Promise<void>;
   disabled: boolean;
@@ -107,6 +139,15 @@ function LaneCard({
     : lane.lastPulledAt
       ? `Last pulled ${relativeTime(lane.lastPulledAt)}`
       : 'Never synced';
+
+  const pendingRows = counts
+    ? [
+        { label: 'Jobs not yet pushed', value: counts.pendingJobs },
+        { label: 'Photos pending upload', value: counts.pendingPhotos },
+        { label: 'Voice clips pending upload', value: counts.pendingClips },
+        { label: 'Files in upload queue', value: counts.pendingUploads },
+      ].filter((r) => r.value > 0)
+    : [];
 
   return (
     <View style={styles.card}>
@@ -131,13 +172,18 @@ function LaneCard({
 
       <View style={styles.metaRow}>
         <Text style={styles.metaLine}>{lastLabel}</Text>
-        {pendingSummary && (
-          <>
-            <Text style={styles.metaSep}>·</Text>
-            <Text style={[styles.metaLine, styles.metaAttn]}>{pendingSummary}</Text>
-          </>
-        )}
       </View>
+
+      {pendingRows.length > 0 && (
+        <View style={styles.pendingList}>
+          {pendingRows.map((r) => (
+            <View key={r.label} style={styles.pendingRow}>
+              <Text style={styles.pendingLabel}>{r.label}</Text>
+              <Text style={styles.pendingValue}>{r.value}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {lane.lastResult && !lane.lastResult.ok && lane.lastResult.error && (
         <Text style={styles.errorLine} numberOfLines={3}>
@@ -223,6 +269,50 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'space-between',
     },
+    autoSyncRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.md,
+      padding: spacing.md,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.line,
+      backgroundColor: colors.surface,
+    },
+    autoSyncText: { flex: 1, gap: 2 },
+    autoSyncTitle: {
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 13.5,
+      color: colors.text,
+    },
+    autoSyncBlurb: {
+      fontFamily: fonts.sans,
+      fontSize: 11.5,
+      color: colors.mute,
+      lineHeight: 16,
+    },
+    pendingList: {
+      gap: 4,
+      paddingTop: spacing.xs,
+      borderTopWidth: 1,
+      borderTopColor: colors.lineSoft,
+    },
+    pendingRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 2,
+    },
+    pendingLabel: {
+      fontFamily: fonts.sans,
+      fontSize: 12,
+      color: colors.muteDeep,
+    },
+    pendingValue: {
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 12.5,
+      color: colors.amber,
+    },
     card: {
       padding: spacing.md,
       borderRadius: radii.lg,
@@ -297,6 +387,29 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.bg,
     },
     syncBtnDisabled: { opacity: 0.55 },
+    historyBtn: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderStyle: 'dashed',
+      backgroundColor: 'transparent',
+    },
+    historyBtnText: { flex: 1, gap: 2 },
+    historyBtnTitle: {
+      fontFamily: fonts.sansSemiBold,
+      fontSize: 13,
+      color: colors.text,
+    },
+    historyBtnBlurb: {
+      fontFamily: fonts.sans,
+      fontSize: 11.5,
+      color: colors.mute,
+      lineHeight: 16,
+    },
     syncBtnLabel: {
       fontFamily: fonts.sansSemiBold,
       fontSize: 12.5,

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { subscribeLocalDataChanges } from '../../offline/dataBus';
+import { errorMessage } from '../../offline/errors';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { ActivityDay, Job } from '../../types/job';
 import {
@@ -50,6 +52,9 @@ export function useProfileData(
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
 
+  // Refetch whenever any local mutation or a sync pull lands.
+  useEffect(() => subscribeLocalDataChanges(reload), [reload]);
+
   useEffect(() => {
     if (!repo) {
       setState((prev) => ({ ...prev, loading: false }));
@@ -71,7 +76,7 @@ export function useProfileData(
         setState((prev) => ({
           ...prev,
           loading: false,
-          error: err instanceof Error ? err : new Error(String(err)),
+          error: err instanceof Error ? err : new Error(errorMessage(err)),
         }));
       }
     })();

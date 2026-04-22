@@ -1,6 +1,7 @@
 import NetInfo from '@react-native-community/netinfo';
 import { eq } from 'drizzle-orm';
 import { db } from '../../offline/db';
+import { notifyLocalDataChanged } from '../../offline/dataBus';
 import { job_clips } from '../../offline/schema';
 import { newId } from '../../offline/uuid';
 
@@ -73,6 +74,7 @@ export async function createAndUploadClip(params: {
     updated_at: nowMs,
   });
   const inserted = await db.select().from(job_clips).where(eq(job_clips.id, id)).limit(1);
+  notifyLocalDataChanged();
   return toClipRow(inserted[0]);
 }
 
@@ -88,6 +90,7 @@ export async function linkClipToJob(clipId: string, jobId: string): Promise<void
     .update(job_clips)
     .set({ job_id: jobId, sync_state: 'pending_update', updated_at: Date.now() })
     .where(eq(job_clips.id, clipId));
+  notifyLocalDataChanged();
 }
 
 // Dictation — voice into a form field. This is strictly online: the edge

@@ -97,12 +97,24 @@ export async function pushJobs(client: SupabaseClient): Promise<void> {
   }
 }
 
+// Default window: skip rows updated more than 90 days ago. Keeps the local DB
+// trim on first install — users with years of history don't need every row
+// on the device. Passing { full: true } pulls everything and is used by the
+// "Sync all history" button in the Me screen.
+const DEFAULT_PULL_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+
 // Pull jobs updated on the server since our last cursor. Last-write-wins by
 // `updated_at` — if a remote update is newer than a locally pending change,
 // the remote wins (we clobber our pending edit). This is acceptable for a
 // single-author workflow; revisit when we support multi-tech collaboration.
-export async function pullJobs(client: SupabaseClient, userId: string): Promise<void> {
-  const cursorMs = await getMetaNumber('jobs.last_pulled_at');
+export async function pullJobs(
+  client: SupabaseClient,
+  userId: string,
+  opts: { full?: boolean } = {},
+): Promise<void> {
+  const stored = await getMetaNumber('jobs.last_pulled_at');
+  const windowFloor = Date.now() - DEFAULT_PULL_WINDOW_MS;
+  const cursorMs = opts.full ? stored : Math.max(stored, windowFloor);
   const cursorIso = new Date(cursorMs).toISOString();
 
   const { data, error } = await client

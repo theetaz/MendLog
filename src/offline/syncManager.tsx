@@ -168,6 +168,18 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
     void refreshMeta();
   }, [refreshMeta]);
 
+  // First-run pull — once auth is ready, kick both lanes immediately so the
+  // local DB gets populated without waiting for the 30s debounce. Screens
+  // read from local, so an empty mirror on cold start would show blank
+  // lists; this fills them right away when online.
+  const didInitialSync = useRef(false);
+  useEffect(() => {
+    if (!userId || didInitialSync.current) return;
+    didInitialSync.current = true;
+    void runDataLane();
+    void runCatalogLane();
+  }, [userId, runDataLane, runCatalogLane]);
+
   // Network state subscription.
   useEffect(() => {
     const handler = (state: NetInfoState) => {

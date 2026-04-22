@@ -1,13 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { DayViewScreen } from '../../src/features/jobs/DayViewScreen';
-import { getSupabaseClient } from '../../src/lib/supabase';
-import { SupabaseJobsRepository } from '../../src/repositories/SupabaseJobsRepository';
+import { OfflineJobsRepository } from '../../src/offline/repos/OfflineJobsRepository';
 
 export default function DayViewRoute() {
   const { date } = useLocalSearchParams<{ date: string }>();
   const router = useRouter();
-  const repo = useMemo(() => new SupabaseJobsRepository(getSupabaseClient()), []);
+  const repo = useMemo(() => new OfflineJobsRepository(), []);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();

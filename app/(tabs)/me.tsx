@@ -3,7 +3,7 @@ import { useCallback, useMemo } from 'react';
 import { useAuth } from '../../src/features/auth/AuthProvider';
 import { MeScreen } from '../../src/features/me/MeScreen';
 import { getSupabaseClient } from '../../src/lib/supabase';
-import { SupabaseJobsRepository } from '../../src/repositories/SupabaseJobsRepository';
+import { OfflineJobsRepository } from '../../src/offline/repos/OfflineJobsRepository';
 
 export default function MeRoute() {
   const router = useRouter();
@@ -14,7 +14,7 @@ export default function MeRoute() {
   const memberSince = session?.user?.created_at ?? undefined;
 
   const client = useMemo(() => getSupabaseClient(), []);
-  const repo = useMemo(() => new SupabaseJobsRepository(client), [client]);
+  const repo = useMemo(() => new OfflineJobsRepository(), []);
 
   const handleUpdateDisplayName = useCallback(
     async (name: string) => {

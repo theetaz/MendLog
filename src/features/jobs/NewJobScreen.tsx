@@ -34,12 +34,7 @@ import {
 import { AppBar, Btn, Icon, SectionLabel } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import { useCatalog } from '../catalog/useCatalog';
-import {
-  type ClipRow,
-  createAndUploadClip,
-  fetchClip,
-  invokeTranscribe,
-} from './clipsApi';
+import { type ClipRow, createAndUploadClip } from './clipsApi';
 import { saveJob } from './jobsApi';
 import { DEFAULT_STATUS, STATUS_OPTIONS, statusOption } from './statusOptions';
 import type { JobStatus } from '../../types/job';
@@ -126,7 +121,7 @@ export function NewJobScreen({ userId, onClose, onSaved }: NewJobScreenProps) {
   const [noteClip, setNoteClip] = useState<ClipRow | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [noteElapsedMs, setNoteElapsedMs] = useState(0);
-  const clipIdsRef = useRef<Set<number>>(new Set());
+  const clipIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (noteStage !== 'recording') return;
@@ -169,34 +164,16 @@ export function NewJobScreen({ userId, onClose, onSaved }: NewJobScreenProps) {
       const uri = recorder.uri;
       if (!uri) throw new Error('no recording file produced');
 
+      // Save clip locally. Upload + transcription are deferred to the sync
+      // engine — the transcript will appear after the device is online and
+      // the pull sync has caught up. No network calls happen here.
       setNoteStage('uploading');
       const row = await createAndUploadClip({ userId, localUri: uri, durationMs });
       clipIdsRef.current.add(row.id);
       setNoteClip(row);
-
-      setNoteStage('processing');
-      const result = await invokeTranscribe(row.id);
-      const latest = await fetchClip(row.id).catch(() => null);
-      setNoteClip(
-        latest ?? {
-          ...row,
-          transcript_raw: result.transcript_raw,
-          transcript_clean: result.transcript_clean,
-          transcript_en_raw: result.transcript_en_raw,
-          transcript_en_clean: result.transcript_en_clean,
-          status: 'done',
-        },
-      );
-
-      // Auto-seed description from English transcript if description still empty
-      const englishTranscript = (latest?.transcript_en_clean ?? result.transcript_en_clean ?? '').trim();
-      if (englishTranscript) {
-        setForm((s) => (s.description.trim() ? s : { ...s, description: englishTranscript }));
-      }
-
       setNoteStage('done');
     } catch (e) {
-      setNoteError(e instanceof Error ? e.message : 'Transcription failed');
+      setNoteError(e instanceof Error ? e.message : 'Saving failed');
       setNoteStage('error');
     }
   }, [noteElapsedMs, recorder, recorderState.durationMillis, userId]);

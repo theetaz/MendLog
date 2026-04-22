@@ -1,11 +1,16 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import NetInfo from '@react-native-community/netinfo';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { StagedPhoto } from '../../components/form/PhotoGrid';
 import { getSupabaseClient } from '../../lib/supabase';
-import { rowToJob, type JobRow } from '../../repositories/rowToJob';
+import { db } from '../../offline/db';
+import { job_clips, job_photos, jobs as jobsTable } from '../../offline/schema';
+import { newId } from '../../offline/uuid';
 import type { Job, JobStatus } from '../../types/job';
-import type { ClipRow } from './clipsApi';
-import { invokeAnnotatePhoto, uploadAndInsertPhoto } from './photosApi';
-import type { PhotoRow } from './photosApi';
+
+// Offline-first data layer for jobs. All reads/writes hit the local SQLite
+// mirror; the sync engine (src/offline/sync) eventually pushes to Supabase.
+// Screens should not need to know where the data lives — they call these
+// helpers exactly as before.
 
 export interface JobFormPayload {
   machine: string;
@@ -19,7 +24,7 @@ export interface JobFormPayload {
   completedAt: Date | null;
   idleMinutes: number;
   status: JobStatus;
-  clipIds: number[];
+  clipIds: string[]; // local UUIDs from previously-recorded clips
   photos: StagedPhoto[];
 }
 
@@ -29,84 +34,70 @@ export interface SavedJob {
   clipCount: number;
 }
 
-function toLocalDateOnly(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+function toDateOnly(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`;
 }
 
-function toLocalTimeOnly(d: Date): string {
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${hh}:${mi}:${ss}`;
+function toTimeOnly(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(
+    2,
+    '0',
+  )}:${String(d.getSeconds()).padStart(2, '0')}`;
 }
 
-/**
- * Saves the job row + links voice clips synchronously (fast), then kicks off
- * photo uploads + AI annotations in the background so the UI doesn't block on
- * slow network operations. The caller gets `{ id }` back in ~200–400 ms.
- *
- * If the app is killed mid-upload, background photos may not persist. That's
- * an acceptable trade for v1 — user sees the saved job instantly and can come
- * back to add more photos via Edit.
- */
-export async function saveJob(
-  userId: string,
-  payload: JobFormPayload,
-  client?: SupabaseClient,
-): Promise<SavedJob> {
-  const c = client ?? getSupabaseClient();
+// Save a job entirely to the local DB. Photos arrive as StagedPhoto from the
+// form (local file URIs) and are inserted as pending upload_state rows;
+// clip IDs are updated to link to the new job. Zero network calls.
+export async function saveJob(userId: string, payload: JobFormPayload): Promise<SavedJob> {
+  const jobId = newId();
+  const nowMs = Date.now();
 
-  const { data: job, error: jobErr } = await c
-    .from('jobs')
-    .insert({
-      machine: payload.machine.trim(),
-      dept: payload.dept.trim(),
-      inv: payload.inv.trim() || null,
-      date: toLocalDateOnly(payload.reportedAt),
-      reported_time: toLocalTimeOnly(payload.reportedAt),
-      completed_at: payload.completedAt ? payload.completedAt.toISOString() : null,
-      idle_minutes: payload.idleMinutes,
-      status: payload.status,
-      description: payload.description.trim(),
-      root_cause: payload.rootCause.trim(),
-      corrective_action: payload.correctiveAction.trim(),
-      remarks: payload.remarks.trim(),
-      photos: payload.photos.length,
-      clips: payload.clipIds.length,
-    })
-    .select('id')
-    .single();
+  await db.insert(jobsTable).values({
+    id: jobId,
+    user_id: userId,
+    sync_state: 'pending_insert',
+    created_at: nowMs,
+    updated_at: nowMs,
+    machine: payload.machine.trim(),
+    dept: payload.dept.trim(),
+    inv: payload.inv.trim() || null,
+    date: toDateOnly(payload.reportedAt),
+    reported_time: toTimeOnly(payload.reportedAt),
+    completed_at: payload.completedAt ? payload.completedAt.toISOString() : null,
+    idle_minutes: payload.idleMinutes,
+    status: payload.status,
+    lang: 'en',
+    description: payload.description.trim(),
+    root_cause: payload.rootCause.trim(),
+    corrective_action: payload.correctiveAction.trim(),
+    remarks: payload.remarks.trim(),
+  });
 
-  if (jobErr || !job) throw new Error(`save job failed: ${jobErr?.message ?? 'no row'}`);
-  // Job.id is string across the app now; the DB returns a number, stringify
-  // once at the boundary.
-  const jobId = String(job.id);
-
-  if (payload.clipIds.length > 0) {
-    const { error: linkErr } = await c
-      .from('job_clips')
-      .update({ job_id: jobId })
-      .in('id', payload.clipIds);
-    if (linkErr) console.warn('clip link failed:', linkErr.message);
+  for (const clipId of payload.clipIds) {
+    await db
+      .update(job_clips)
+      .set({ job_id: jobId, sync_state: 'pending_update', updated_at: nowMs })
+      .where(eq(job_clips.id, clipId));
   }
 
-  if (payload.photos.length > 0) {
-    // Fire-and-forget; errors are logged but don't block the Save call.
-    void (async () => {
-      for (const photo of payload.photos) {
-        try {
-          const row = await uploadAndInsertPhoto({ userId, jobId, photo, client: c });
-          invokeAnnotatePhoto(row.id, c).catch((e) =>
-            console.warn('annotate invoke failed:', e),
-          );
-        } catch (e) {
-          console.warn('photo upload failed:', e);
-        }
-      }
-    })();
+  for (const photo of payload.photos) {
+    await db.insert(job_photos).values({
+      id: newId(),
+      user_id: userId,
+      job_id: jobId,
+      sync_state: 'pending_insert',
+      created_at: nowMs,
+      updated_at: nowMs,
+      local_uri: photo.uri,
+      storage_path: null,
+      mime_type: 'image/jpeg',
+      width: photo.width ?? null,
+      height: photo.height ?? null,
+      status: 'pending',
+      upload_state: 'pending',
+    });
   }
 
   return {
@@ -114,118 +105,6 @@ export async function saveJob(
     photoCount: payload.photos.length,
     clipCount: payload.clipIds.length,
   };
-}
-
-export interface PhotoWithUrl extends PhotoRow {
-  signed_url: string | null;
-}
-
-export interface ClipWithUrl extends ClipRow {
-  signed_url: string | null;
-}
-
-export interface JobDetail {
-  job: Job;
-  raw: JobRow;
-  photos: PhotoWithUrl[];
-  clips: ClipWithUrl[];
-}
-
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
-
-async function signPaths(
-  client: SupabaseClient,
-  bucket: string,
-  paths: string[],
-): Promise<Map<string, string>> {
-  if (paths.length === 0) return new Map();
-  const { data, error } = await client.storage.from(bucket).createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
-  if (error) {
-    console.warn(`sign ${bucket}:`, error.message);
-    return new Map();
-  }
-  const out = new Map<string, string>();
-  for (const entry of data ?? []) {
-    if (entry.signedUrl && entry.path) out.set(entry.path, entry.signedUrl);
-  }
-  return out;
-}
-
-export async function deleteJob(
-  jobId: string,
-  client?: SupabaseClient,
-): Promise<void> {
-  const c = client ?? getSupabaseClient();
-
-  // Collect storage paths for cascade cleanup before the row is gone.
-  const [{ data: photos }, { data: clips }] = await Promise.all([
-    c.from('job_photos').select('storage_path').eq('job_id', jobId),
-    c.from('job_clips').select('audio_path').eq('job_id', jobId),
-  ]);
-
-  const photoPaths = (photos ?? [])
-    .map((p: { storage_path: string }) => p.storage_path)
-    .filter(Boolean);
-  const clipPaths = (clips ?? [])
-    .map((c2: { audio_path: string }) => c2.audio_path)
-    .filter(Boolean);
-
-  // Fire storage removals in parallel — best-effort; errors logged, not fatal.
-  await Promise.all([
-    photoPaths.length > 0
-      ? c.storage
-          .from('job-photos')
-          .remove(photoPaths)
-          .then((r) => {
-            if (r.error) console.warn('photo storage remove:', r.error.message);
-          })
-      : Promise.resolve(),
-    clipPaths.length > 0
-      ? c.storage
-          .from('job-audio')
-          .remove(clipPaths)
-          .then((r) => {
-            if (r.error) console.warn('clip storage remove:', r.error.message);
-          })
-      : Promise.resolve(),
-  ]);
-
-  const { error } = await c.from('jobs').delete().eq('id', jobId);
-  if (error) throw new Error(`delete job failed: ${error.message}`);
-}
-
-export async function deletePhoto(
-  photoId: number,
-  storagePath: string,
-  client?: SupabaseClient,
-): Promise<void> {
-  const c = client ?? getSupabaseClient();
-  const { error: storageErr } = await c.storage.from('job-photos').remove([storagePath]);
-  if (storageErr) console.warn('photo storage remove:', storageErr.message);
-  const { error } = await c.from('job_photos').delete().eq('id', photoId);
-  if (error) throw new Error(`delete photo failed: ${error.message}`);
-}
-
-export async function deleteClip(
-  clipId: number,
-  audioPath: string,
-  client?: SupabaseClient,
-): Promise<void> {
-  const c = client ?? getSupabaseClient();
-  const { error: storageErr } = await c.storage.from('job-audio').remove([audioPath]);
-  if (storageErr) console.warn('clip storage remove:', storageErr.message);
-  const { error } = await c.from('job_clips').delete().eq('id', clipId);
-  if (error) throw new Error(`delete clip failed: ${error.message}`);
-}
-
-export async function linkClipToJob(
-  clipId: number,
-  jobId: string,
-  client?: SupabaseClient,
-): Promise<void> {
-  const c = client ?? getSupabaseClient();
-  const { error } = await c.from('job_clips').update({ job_id: jobId }).eq('id', clipId);
-  if (error) throw new Error(`link clip failed: ${error.message}`);
 }
 
 export interface JobUpdatePayload {
@@ -242,20 +121,16 @@ export interface JobUpdatePayload {
   status: JobStatus;
 }
 
-export async function updateJob(
-  jobId: string,
-  payload: JobUpdatePayload,
-  client?: SupabaseClient,
-): Promise<void> {
-  const c = client ?? getSupabaseClient();
-  const { error } = await c
-    .from('jobs')
-    .update({
+export async function updateJob(jobId: string, payload: JobUpdatePayload): Promise<void> {
+  const nowMs = Date.now();
+  const result = await db
+    .update(jobsTable)
+    .set({
       machine: payload.machine.trim(),
       dept: payload.dept.trim(),
       inv: payload.inv.trim() || null,
-      date: toLocalDateOnly(payload.reportedAt),
-      reported_time: toLocalTimeOnly(payload.reportedAt),
+      date: toDateOnly(payload.reportedAt),
+      reported_time: toTimeOnly(payload.reportedAt),
       completed_at: payload.completedAt ? payload.completedAt.toISOString() : null,
       idle_minutes: payload.idleMinutes,
       status: payload.status,
@@ -263,40 +138,197 @@ export async function updateJob(
       root_cause: payload.rootCause.trim(),
       corrective_action: payload.correctiveAction.trim(),
       remarks: payload.remarks.trim(),
+      sync_state: 'pending_update',
+      updated_at: nowMs,
     })
-    .eq('id', jobId);
-  if (error) throw new Error(`update job failed: ${error.message}`);
+    .where(eq(jobsTable.id, jobId));
+  void result;
 }
 
-export async function fetchJobDetail(
-  id: string,
-  client?: SupabaseClient,
-): Promise<JobDetail | null> {
-  const c = client ?? getSupabaseClient();
-  const numericId = Number(id);
-  if (!Number.isFinite(numericId)) return null; // local-only UUID not on server yet
-  const { data, error } = await c
-    .from('jobs')
-    .select('*, job_photos(*), job_clips(*)')
-    .eq('id', numericId)
-    .maybeSingle();
-  if (error) throw new Error(`job fetch: ${error.message}`);
-  if (!data) return null;
+// Soft delete — keeps the tombstone locally until sync drains it. The sync
+// engine currently skips pending_delete (see sync/jobs.ts TODO); this still
+// hides the job from every list query.
+export async function deleteJob(jobId: string): Promise<void> {
+  const nowMs = Date.now();
+  await db
+    .update(jobsTable)
+    .set({ sync_state: 'pending_delete', deleted_at: nowMs, updated_at: nowMs })
+    .where(eq(jobsTable.id, jobId));
+}
 
-  const raw = data as JobRow & { job_photos?: PhotoRow[]; job_clips?: ClipRow[] };
-  const job = rowToJob(raw);
-  const photos = (raw.job_photos ?? []).slice().sort((a, b) => a.id - b.id);
-  const clips = (raw.job_clips ?? []).slice().sort((a, b) => a.id - b.id);
+export async function linkClipToJob(clipId: string, jobId: string): Promise<void> {
+  await db
+    .update(job_clips)
+    .set({ job_id: jobId, sync_state: 'pending_update', updated_at: Date.now() })
+    .where(eq(job_clips.id, clipId));
+}
 
+// Soft delete. The sync engine doesn't yet push pending_delete (TODO) but
+// the rows are hidden from every list query via the deleted_at filter.
+export async function deletePhoto(photoId: string): Promise<void> {
+  const nowMs = Date.now();
+  await db
+    .update(job_photos)
+    .set({ sync_state: 'pending_delete', deleted_at: nowMs, updated_at: nowMs })
+    .where(eq(job_photos.id, photoId));
+}
+
+export async function deleteClip(clipId: string): Promise<void> {
+  const nowMs = Date.now();
+  await db
+    .update(job_clips)
+    .set({ sync_state: 'pending_delete', deleted_at: nowMs, updated_at: nowMs })
+    .where(eq(job_clips.id, clipId));
+}
+
+// Stage a new photo during an edit. Same shape as the new-job staging path
+// in `saveJob`: row is pending_insert with local_uri, upload_state pending.
+export async function addPhotoToJob(
+  userId: string,
+  jobId: string,
+  photo: StagedPhoto,
+): Promise<void> {
+  const nowMs = Date.now();
+  await db.insert(job_photos).values({
+    id: newId(),
+    user_id: userId,
+    job_id: jobId,
+    sync_state: 'pending_insert',
+    created_at: nowMs,
+    updated_at: nowMs,
+    local_uri: photo.uri,
+    storage_path: null,
+    mime_type: 'image/jpeg',
+    width: photo.width ?? null,
+    height: photo.height ?? null,
+    status: 'pending',
+    upload_state: 'pending',
+  });
+}
+
+// --- Read path --- //
+
+export interface PhotoWithUrl {
+  id: string;
+  signed_url: string | null; // cloud URL when uploaded, file:// when local-only
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  blurhash: string | null;
+  ai_description: string | null;
+  ai_tags: string[];
+  status: string;
+}
+
+export interface ClipWithUrl {
+  id: string;
+  signed_url: string | null;
+  duration_ms: number;
+  transcript_raw: string | null;
+  transcript_clean: string | null;
+  transcript_en_raw: string | null;
+  transcript_en_clean: string | null;
+  status: string;
+}
+
+export interface JobDetail {
+  job: Job;
+  photos: PhotoWithUrl[];
+  clips: ClipWithUrl[];
+}
+
+const SIGNED_URL_TTL = 60 * 60;
+
+async function maybeSignPaths(bucket: string, paths: string[]): Promise<Map<string, string>> {
+  if (paths.length === 0) return new Map();
+  const net = await NetInfo.fetch().catch(() => null);
+  if (!net?.isConnected) return new Map();
+  const client = getSupabaseClient();
+  const { data, error } = await client.storage.from(bucket).createSignedUrls(paths, SIGNED_URL_TTL);
+  if (error) {
+    console.warn(`sign ${bucket}:`, error.message);
+    return new Map();
+  }
+  const out = new Map<string, string>();
+  for (const entry of data ?? []) {
+    if (entry.signedUrl && entry.path) out.set(entry.path, entry.signedUrl);
+  }
+  return out;
+}
+
+export async function fetchJobDetail(id: string): Promise<JobDetail | null> {
+  const jobRows = await db.select().from(jobsTable).where(eq(jobsTable.id, id)).limit(1);
+  if (jobRows.length === 0) return null;
+  const jobRow = jobRows[0];
+  if (jobRow.deleted_at) return null;
+
+  const photos = await db
+    .select()
+    .from(job_photos)
+    .where(and(eq(job_photos.job_id, id), isNull(job_photos.deleted_at)));
+  const clips = await db
+    .select()
+    .from(job_clips)
+    .where(and(eq(job_clips.job_id, id), isNull(job_clips.deleted_at)));
+
+  const photoPaths = photos.map((p) => p.storage_path).filter((p): p is string => !!p);
+  const clipPaths = clips.map((c) => c.audio_path).filter((p): p is string => !!p);
   const [photoUrls, clipUrls] = await Promise.all([
-    signPaths(c, 'job-photos', photos.map((p) => p.storage_path)),
-    signPaths(c, 'job-audio', clips.map((clip) => clip.audio_path)),
+    maybeSignPaths('job-photos', photoPaths),
+    maybeSignPaths('job-audio', clipPaths),
   ]);
+
+  const job: Job = {
+    id: jobRow.id,
+    machine: jobRow.machine,
+    dept: jobRow.dept,
+    inv: jobRow.inv ?? '',
+    date: jobRow.date,
+    time: jobRow.reported_time.slice(0, 5),
+    completedAt: jobRow.completed_at,
+    idleMinutes: jobRow.idle_minutes,
+    status: jobRow.status as JobStatus,
+    lang: jobRow.lang as Job['lang'],
+    photos: photos.length,
+    clips: clips.length,
+    rootCause: jobRow.root_cause,
+    desc: jobRow.description,
+    action: jobRow.corrective_action,
+    remarks: jobRow.remarks,
+  };
 
   return {
     job,
-    raw,
-    photos: photos.map((p) => ({ ...p, signed_url: photoUrls.get(p.storage_path) ?? null })),
-    clips: clips.map((c2) => ({ ...c2, signed_url: clipUrls.get(c2.audio_path) ?? null })),
+    photos: photos.map<PhotoWithUrl>((p) => ({
+      id: p.id,
+      signed_url:
+        (p.storage_path ? photoUrls.get(p.storage_path) : null) ?? p.local_uri ?? null,
+      mime_type: p.mime_type,
+      width: p.width,
+      height: p.height,
+      blurhash: p.blurhash,
+      ai_description: p.ai_description,
+      ai_tags: p.ai_tags ? safeJsonArray(p.ai_tags) : [],
+      status: p.status,
+    })),
+    clips: clips.map<ClipWithUrl>((c) => ({
+      id: c.id,
+      signed_url: (c.audio_path ? clipUrls.get(c.audio_path) : null) ?? c.local_uri ?? null,
+      duration_ms: c.duration_ms,
+      transcript_raw: c.transcript_raw,
+      transcript_clean: c.transcript_clean,
+      transcript_en_raw: c.transcript_en_raw,
+      transcript_en_clean: c.transcript_en_clean,
+      status: c.status,
+    })),
   };
+}
+
+function safeJsonArray(s: string): string[] {
+  try {
+    const parsed = JSON.parse(s);
+    return Array.isArray(parsed) ? (parsed as string[]) : [];
+  } catch {
+    return [];
+  }
 }

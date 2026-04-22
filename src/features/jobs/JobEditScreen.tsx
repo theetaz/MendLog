@@ -34,6 +34,7 @@ import type { ClipRow } from './clipsApi';
 import {
   type ClipWithUrl,
   type PhotoWithUrl,
+  addPhotoToJob,
   deleteClip,
   deleteJob,
   deletePhoto,
@@ -41,7 +42,6 @@ import {
   linkClipToJob,
   updateJob,
 } from './jobsApi';
-import { invokeAnnotatePhoto, uploadAndInsertPhoto } from './photosApi';
 import { useVoiceNoteRecorder } from './useVoiceNoteRecorder';
 
 interface JobEditScreenProps {
@@ -126,12 +126,12 @@ export function JobEditScreen({
 
   // Media state
   const [existingPhotos, setExistingPhotos] = useState<PhotoWithUrl[]>([]);
-  const [removedPhotoIds, setRemovedPhotoIds] = useState<Set<number>>(new Set());
+  const [removedPhotoIds, setRemovedPhotoIds] = useState<Set<string>>(new Set());
   const [newPhotos, setNewPhotos] = useState<StagedPhoto[]>([]);
 
   const [existingClips, setExistingClips] = useState<ClipWithUrl[]>([]);
-  const [removedClipIds, setRemovedClipIds] = useState<Set<number>>(new Set());
-  const [newClipIds, setNewClipIds] = useState<number[]>([]);
+  const [removedClipIds, setRemovedClipIds] = useState<Set<string>>(new Set());
+  const [newClipIds, setNewClipIds] = useState<string[]>([]);
   const [newClips, setNewClips] = useState<ClipRow[]>([]);
 
   const voice = useVoiceNoteRecorder({
@@ -189,7 +189,7 @@ export function JobEditScreen({
     setErrors((e) => ({ ...e, [key]: undefined }));
   }, []);
 
-  const togglePhotoRemoval = useCallback((photoId: number) => {
+  const togglePhotoRemoval = useCallback((photoId: string) => {
     setRemovedPhotoIds((prev) => {
       const next = new Set(prev);
       if (next.has(photoId)) next.delete(photoId);
@@ -198,7 +198,7 @@ export function JobEditScreen({
     });
   }, []);
 
-  const toggleClipRemoval = useCallback((clipId: number) => {
+  const toggleClipRemoval = useCallback((clipId: string) => {
     setRemovedClipIds((prev) => {
       const next = new Set(prev);
       if (next.has(clipId)) next.delete(clipId);
@@ -239,34 +239,25 @@ export function JobEditScreen({
       });
 
       for (const photoId of removedPhotoIds) {
-        const photo = existingPhotos.find((p) => p.id === photoId);
-        if (photo) {
-          await deletePhoto(photoId, photo.storage_path).catch((e) =>
-            console.warn('delete photo:', e),
-          );
-        }
+        await deletePhoto(photoId).catch((e: unknown) =>
+          console.warn('delete photo:', e),
+        );
       }
 
       for (const clipId of removedClipIds) {
-        const clip = existingClips.find((c) => c.id === clipId);
-        if (clip) {
-          await deleteClip(clipId, clip.audio_path).catch((e) =>
-            console.warn('delete clip:', e),
-          );
-        }
+        await deleteClip(clipId).catch((e: unknown) =>
+          console.warn('delete clip:', e),
+        );
       }
 
       for (const photo of newPhotos) {
-        try {
-          const row = await uploadAndInsertPhoto({ userId, jobId, photo });
-          invokeAnnotatePhoto(row.id).catch((e) => console.warn('annotate:', e));
-        } catch (e) {
-          console.warn('photo upload:', e);
-        }
+        await addPhotoToJob(userId, jobId, photo).catch((e: unknown) =>
+          console.warn('stage photo:', e),
+        );
       }
 
       for (const clipId of newClipIds) {
-        await linkClipToJob(clipId, jobId).catch((e) =>
+        await linkClipToJob(clipId, jobId).catch((e: unknown) =>
           console.warn('link clip:', e),
         );
       }
@@ -279,8 +270,6 @@ export function JobEditScreen({
       setSaving(false);
     }
   }, [
-    existingClips,
-    existingPhotos,
     form,
     jobId,
     newClipIds,
@@ -596,8 +585,8 @@ function ExistingPhotosEditor({
   styles,
 }: {
   photos: PhotoWithUrl[];
-  removed: Set<number>;
-  onToggleRemove(id: number): void;
+  removed: Set<string>;
+  onToggleRemove(id: string): void;
   styles: ReturnType<typeof makeStyles>;
 }) {
   const colors = useColors();
@@ -659,8 +648,8 @@ function ExistingClipsEditor({
   colors,
 }: {
   clips: ClipWithUrl[];
-  removed: Set<number>;
-  onToggleRemove(id: number): void;
+  removed: Set<string>;
+  onToggleRemove(id: string): void;
   styles: ReturnType<typeof makeStyles>;
   colors: ThemeColors;
 }) {

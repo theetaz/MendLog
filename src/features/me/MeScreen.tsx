@@ -17,6 +17,7 @@ import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import { formatIdle } from '../../utils/idle';
 import { useTheme, type ThemeMode } from '../theme/ThemeProvider';
+import { SyncSection } from './SyncSection';
 import { useProfileData } from './useProfileData';
 
 interface MeScreenProps {
@@ -319,6 +320,8 @@ export function MeScreen({
             )}
           </>
         )}
+
+        <SyncSection />
 
         <SectionLabel>Appearance</SectionLabel>
         <View style={styles.segmentedWrap}>

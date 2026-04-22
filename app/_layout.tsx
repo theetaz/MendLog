@@ -12,6 +12,7 @@ import {
   useOnboarding,
 } from '../src/features/onboarding/OnboardingContext';
 import { useOfflineMigrations } from '../src/offline/migrations';
+import { SyncProvider } from '../src/offline/syncManager';
 import { AnimatedSplash } from '../src/features/splash/AnimatedSplash';
 import { FONT_MAP } from '../src/features/splash/fonts';
 import { ThemeProvider, useTheme } from '../src/features/theme/ThemeProvider';
@@ -44,11 +45,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider client={getSupabaseClient()}>
-          <OnboardingProvider>
-            <RootGate />
-            <ThemedStatusBar />
-            {!splashDone && <AnimatedSplash onFinish={() => setSplashDone(true)} />}
-          </OnboardingProvider>
+          <SyncProvider>
+            <OnboardingProvider>
+              <RootGate />
+              <ThemedStatusBar />
+              {!splashDone && <AnimatedSplash onFinish={() => setSplashDone(true)} />}
+            </OnboardingProvider>
+          </SyncProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>

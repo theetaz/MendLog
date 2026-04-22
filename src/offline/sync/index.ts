@@ -1,8 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { and, isNotNull, isNull, ne } from 'drizzle-orm';
+import { db } from '../db';
+import { job_clips, job_photos, jobs } from '../schema';
+import { pullCatalog } from './catalog';
 import { pushClips } from './clips';
 import { pullJobs, pushJobs } from './jobs';
+import { getMetaNumber } from './meta';
 import { pushPhotos } from './photos';
-import { drainClipUploads, drainPhotoUploads } from './uploadQueue';
+import { drainClipUploads, drainPhotoUploads, pendingUploadCount } from './uploadQueue';
+
+export interface SyncCounts {
+  pendingJobs: number;
+  pendingPhotos: number;
+  pendingClips: number;
+  pendingUploads: number;
+}
 
 export interface SyncResult {
   ok: boolean;
@@ -10,16 +22,9 @@ export interface SyncResult {
   durationMs: number;
 }
 
-// Orchestrator. Order matters:
-//   1. Push jobs — children FK to these, so they need server_ids first.
-//   2. Drain file uploads — photos/clips can only push their rows once the
-//      blob is in place.
-//   3. Push photos + clips.
-//   4. Pull jobs — fetch anything the server changed since our cursor.
-// Pull for photos/clips (AI annotations, transcripts) is deferred — they
-// flow back through `subscribeToClip` today; moving those to pull-based is
-// a follow-up once the push path is verified on-device.
-export async function runSync(
+// Full data sync — user-generated rows (push) then server-side updates (pull).
+// Order matters: children FK to jobs, so parent server_ids must exist first.
+export async function runDataSync(
   client: SupabaseClient,
   userId: string,
 ): Promise<SyncResult> {
@@ -41,5 +46,83 @@ export async function runSync(
   }
 }
 
-export { hasDirtyJobs } from './jobs';
-export { pendingUploadCount } from './uploadQueue';
+// Metadata sync — reference data only (departments, machines). Safe to run
+// independently of the data sync; doesn't touch any dirty rows.
+export async function runCatalogSync(client: SupabaseClient): Promise<SyncResult> {
+  const started = Date.now();
+  try {
+    await pullCatalog(client);
+    return { ok: true, durationMs: Date.now() - started };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+      durationMs: Date.now() - started,
+    };
+  }
+}
+
+// Convenience orchestrator — used by the background manager; UI pieces can
+// invoke the two halves separately if they want finer control.
+export async function runFullSync(
+  client: SupabaseClient,
+  userId: string,
+): Promise<{ data: SyncResult; catalog: SyncResult }> {
+  const [catalog, data] = await Promise.all([
+    runCatalogSync(client),
+    runDataSync(client, userId),
+  ]);
+  return { data, catalog };
+}
+
+// Snapshot counts used by the sync UI. Cheap queries; call on-demand.
+export async function getSyncCounts(): Promise<SyncCounts> {
+  const pendingJobs = (
+    await db.select({ id: jobs.id }).from(jobs).where(ne(jobs.sync_state, 'synced'))
+  ).length;
+
+  const pendingPhotos = (
+    await db
+      .select({ id: job_photos.id })
+      .from(job_photos)
+      .where(
+        and(
+          ne(job_photos.sync_state, 'synced'),
+          isNotNull(job_photos.storage_path),
+          isNull(job_photos.deleted_at),
+        ),
+      )
+  ).length;
+
+  const pendingClips = (
+    await db
+      .select({ id: job_clips.id })
+      .from(job_clips)
+      .where(
+        and(
+          ne(job_clips.sync_state, 'synced'),
+          isNotNull(job_clips.audio_path),
+          isNull(job_clips.deleted_at),
+        ),
+      )
+  ).length;
+
+  return {
+    pendingJobs,
+    pendingPhotos,
+    pendingClips,
+    pendingUploads: await pendingUploadCount(),
+  };
+}
+
+export async function getCatalogLastPulledAt(): Promise<number> {
+  return getMetaNumber('catalog.last_pulled_at');
+}
+
+export async function getJobsLastPulledAt(): Promise<number> {
+  return getMetaNumber('jobs.last_pulled_at');
+}
+
+// Back-compat for callers still importing the old name.
+export const runSync = runFullSync;
+export { pendingUploadCount };

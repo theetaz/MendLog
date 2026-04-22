@@ -79,6 +79,22 @@ export const job_clips = sqliteTable('job_clips', {
   upload_error: text('upload_error'),
 });
 
+// Catalog mirror — read-only reference data fetched from the server in bulk.
+// No sync_state / deleted_at / server_id fields because the client never
+// mutates these: a metadata sync just truncates the table and refills it.
+export const departments = sqliteTable('departments', {
+  id: integer('id').primaryKey(), // server id, mirrored 1:1
+  name: text('name').notNull(),
+  sort_order: integer('sort_order').notNull().default(0),
+});
+
+export const machines = sqliteTable('machines', {
+  id: integer('id').primaryKey(),
+  department_id: integer('department_id').notNull(),
+  name: text('name').notNull(),
+  sort_order: integer('sort_order').notNull().default(0),
+});
+
 // Key/value store for sync cursors — e.g. `jobs.last_pulled_at: 1719427200000`.
 export const sync_meta = sqliteTable('sync_meta', {
   key: text('key').primaryKey(),
@@ -91,3 +107,5 @@ export type PhotoRow = typeof job_photos.$inferSelect;
 export type PhotoInsert = typeof job_photos.$inferInsert;
 export type ClipRow = typeof job_clips.$inferSelect;
 export type ClipInsert = typeof job_clips.$inferInsert;
+export type DepartmentRow = typeof departments.$inferSelect;
+export type MachineRow = typeof machines.$inferSelect;

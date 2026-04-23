@@ -12,6 +12,7 @@ import {
 } from '../../offline/syncState';
 import { newId } from '../../offline/uuid';
 import type { Job, JobStatus } from '../../types/job';
+import { localDateIso } from '../../utils/localDate';
 
 // Offline-first data layer for jobs. All reads/writes hit the local SQLite
 // mirror; the sync engine (src/offline/sync) eventually pushes to Supabase.
@@ -41,9 +42,7 @@ export interface SavedJob {
 }
 
 function toDateOnly(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate(),
-  ).padStart(2, '0')}`;
+  return localDateIso(d);
 }
 
 function toTimeOnly(d: Date): string {

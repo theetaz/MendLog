@@ -60,10 +60,9 @@ jobs:
 
       # EAS build runs in Expo's cloud — this step blocks until the build
       # artifact is ready. `--wait` streams progress back to the runner.
+      # Runtime env (EXPO_PUBLIC_*) lives in the EAS "preview" environment;
+      # set via `eas env:create --environment preview ...`.
       - name: Build Android APK via EAS
-        env:
-          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
         run: eas build --platform android --profile preview --non-interactive --wait
 
       # EAS doesn't return the artifact URL from the `build` command in

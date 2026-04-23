@@ -18,6 +18,7 @@ export interface Machine {
   department_id: number;
   name: string;
   sort_order: number;
+  inventory_number: string | null;
 }
 
 export async function fetchDepartments(): Promise<Department[]> {

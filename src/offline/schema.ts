@@ -93,6 +93,7 @@ export const machines = sqliteTable('machines', {
   department_id: integer('department_id').notNull(),
   name: text('name').notNull(),
   sort_order: integer('sort_order').notNull().default(0),
+  inventory_number: text('inventory_number'),
 });
 
 // Key/value store for sync cursors — e.g. `jobs.last_pulled_at: 1719427200000`.

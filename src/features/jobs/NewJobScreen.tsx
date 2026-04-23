@@ -293,7 +293,20 @@ export function NewJobScreen({ userId, onClose, onSaved }: NewJobScreenProps) {
             required
             value={form.machine}
             options={machineOptions}
-            onChange={(next) => update('machine', next)}
+            onChange={(next) => {
+              // Autofill the inventory number from the picked machine when it
+              // has one on file. Users can still edit after, so we only fill
+              // (not override) when the machine carries a value.
+              const inv = next
+                ? catalog.machines.find((m) => m.id === Number(next.id))?.inventory_number
+                : null;
+              setForm((s) => ({
+                ...s,
+                machine: next,
+                inv: inv && inv.trim() ? inv : s.inv,
+              }));
+              setErrors((e) => ({ ...e, machine: undefined, inv: undefined }));
+            }}
             error={errors.machine}
             disabled={!form.department}
             disabledHint="Pick a department first"

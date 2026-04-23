@@ -1,6 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import { clearUserScopedData } from '../../offline/clearSession';
 
 export type AuthStatus = 'loading' | 'signed-in' | 'signed-out';
 
@@ -73,6 +74,13 @@ export function AuthProvider({ client, children }: AuthProviderProps) {
   );
 
   const signOut = useCallback(async () => {
+    // Wipe the local mirror BEFORE clearing the session so that if the
+    // signOut call fails mid-flight, the next sign-in's mismatch check
+    // (see ensureUserScopedDataForSession) still covers us.
+    await clearUserScopedData().catch(() => {
+      // Best-effort: sign-out should still proceed so the user isn't
+      // stuck. The mismatch check at next sign-in is the safety net.
+    });
     await client.auth.signOut();
   }, [client]);
 

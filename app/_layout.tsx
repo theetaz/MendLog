@@ -3,8 +3,14 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { useCallback, useEffect, useState } from 'react';
+import { LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
+
+// react-native-image-viewing (used by the job photo lightbox) still imports
+// the deprecated SafeAreaView from react-native core. Suppress just that
+// one warning so the dev console stays readable until the lib updates.
+LogBox.ignoreLogs(['SafeAreaView has been deprecated']);
 
 import { AuthProvider, useAuth } from '../src/features/auth/AuthProvider';
 import {

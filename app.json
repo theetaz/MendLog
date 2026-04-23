@@ -89,6 +89,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "95ea9a1a-3f8d-43ca-aeb7-12521a1eee6e"
+      }
+    },
+    "owner": "theetaz"
   }
 }

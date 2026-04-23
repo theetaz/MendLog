@@ -18,7 +18,7 @@ export async function pullCatalog(client: SupabaseClient): Promise<{
       .order('sort_order', { ascending: true }),
     client
       .from('machines')
-      .select('id, department_id, name, sort_order')
+      .select('id, department_id, name, sort_order, inventory_number')
       .order('sort_order', { ascending: true }),
   ]);
   if (deptRes.error) throw new Error(`catalog departments: ${deptRes.error.message}`);
@@ -34,6 +34,7 @@ export async function pullCatalog(client: SupabaseClient): Promise<{
     department_id: number;
     name: string;
     sort_order: number;
+    inventory_number: string | null;
   }[];
 
   // Replace atomically so a partial failure doesn't leave the table empty.

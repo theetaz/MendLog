@@ -78,6 +78,16 @@ create policy "jobs_delete_own"
   on public.jobs for delete
   using (auth.uid() = user_id);
 
+-- ── machines.inventory_number ───────────────────────────────────────────
+-- Asset tag / inventory code for a machine (e.g. "PM/0074/PL"). Nullable
+-- because admins backfill them over time. Mirrored to the offline SQLite
+-- catalog (see src/offline/sync/catalog.ts) so the new-job form can
+-- auto-populate `jobs.inv` when a machine is selected.
+-- (NB: base machines/departments DDL isn't declared in this file — this
+-- schema doc predates them; see the catalog tables in Supabase directly.)
+alter table if exists public.machines
+  add column if not exists inventory_number text;
+
 -- ── Activity helper: jobs per day for the authed user ───────────────────
 create or replace function public.activity_per_day(start_date date, end_date date)
 returns table(day date, count int)

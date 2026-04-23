@@ -388,6 +388,7 @@ function PhotoCarousel({
                     transition={250}
                     contentFit="cover"
                     style={styles.photoImg}
+                    pointerEvents="none"
                   />
                 </Pressable>
               ) : (

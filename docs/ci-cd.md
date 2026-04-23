@@ -10,41 +10,47 @@ App Distribution.
 PR opened ──► ci.yml ──────────── lint · typecheck · test
                                     (blocks merge on failure)
 
-push to main ─► release.yml ────► verify (same checks)
-                                  └► EAS build (Android, profile: preview)
-                                      └► curl APK artifact
-                                          └► Firebase App Distribution
-                                              └► emails "field-testers"
+ready to ship ─► ./deploy.sh ───► bump versionCode in app.json
+                                  └► gradle :app:assembleRelease
+                                      └► firebase appdistribution:distribute
+                                          └► emails "field-testers"
 ```
 
-One release at a time — `concurrency.group: release-main` cancels the
-older run if a newer commit lands mid-release.
+Builds run on the developer's machine, not in GitHub Actions. The EAS +
+Firebase auto-release workflow was removed on 2026-04-23 — local builds
+are ~6× faster (≈2.5 min vs ≈15 min on the EAS free tier) and don't
+queue behind paid projects at peak times.
 
-## Required GitHub secrets
+## Required local setup
 
-Set under **Settings → Secrets and variables → Actions**. The pipeline
-fails fast if any are missing.
+- JDK 17, Android SDK, `ANDROID_HOME` exported
+- Node + npm (`firebase-tools` is pulled via `npx` on demand)
+- `.env.deploy` at the repo root — copy `.env.deploy.example` and fill:
+  | Var                      | Source                                                                 |
+  | ------------------------ | ---------------------------------------------------------------------- |
+  | `FIREBASE_APP_ID`        | Firebase console → project settings → your apps → `1:...:android:...`  |
+  | `FIREBASE_TOKEN`         | `npx firebase-tools login:ci` (local one-off)                          |
+  | `FIREBASE_TESTER_GROUPS` | optional; defaults to `field-testers`                                  |
 
-| Secret                            | Source                                                           | Sensitive? |
-| --------------------------------- | ---------------------------------------------------------------- | ---------- |
-| `EXPO_TOKEN`                      | expo.dev → Access tokens                                         | yes        |
-| `FIREBASE_TOKEN`                  | `firebase login:ci` (local one-off)                              | yes        |
-| `FIREBASE_ANDROID_APP_ID`         | Firebase console → project settings → your apps → `1:...:android:...` | no     |
-| `EXPO_PUBLIC_SUPABASE_URL`        | Supabase project settings → API                                  | no         |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY`   | Supabase project settings → API                                  | no (public by design) |
+`.env.deploy` is gitignored. `FIREBASE_TOKEN` is deprecated by Google;
+plan to migrate to `GOOGLE_APPLICATION_CREDENTIALS` (service account
+JSON) later.
 
-To rotate a token: revoke at source, regenerate, paste the new value into
-the same secret. Rotation triggers no pipeline changes.
+## Shipping a build
 
-## EAS profiles (`eas.json`)
+```
+./deploy.sh                          # bump versionCode, build, distribute
+./deploy.sh --version 1.0.1          # also bump versionName
+./deploy.sh --notes "fixes X"        # custom release notes (default: last commit)
+./deploy.sh --groups qa,field-testers
+./deploy.sh --dirty                  # allow uncommitted changes
+./deploy.sh --no-commit              # skip committing the version bump
+./deploy.sh --skip-build             # reuse existing APK (retry distribution only)
+```
 
-| Profile      | Distribution | Artifact    | Channel      | Used by         |
-| ------------ | ------------ | ----------- | ------------ | --------------- |
-| `preview`    | internal     | APK         | `preview`    | this pipeline   |
-| `production` | store        | AAB         | `production` | future Play release |
-
-`appVersionSource: "remote"` means EAS manages `versionCode` — every
-build is monotonic without touching `app.json`.
+`app.json` (`expo.version` + `expo.android.versionCode`) is the source
+of truth; the script syncs those into `android/app/build.gradle` before
+gradle runs.
 
 ## Firebase setup (one-time)
 
@@ -52,25 +58,28 @@ Inside the Firebase console for project `mendlog`:
 
 1. **Release & Monitor → App Distribution** → accept terms.
 2. **Testers & groups** → create group `field-testers` (name must match
-   the `--groups` flag in `release.yml`).
+   the default `--groups` flag in `deploy.sh`, or set
+   `FIREBASE_TESTER_GROUPS` in `.env.deploy`).
 3. Add tester emails. Testers get an invite once their first build
    lands; subsequent builds email them automatically.
 
-## Manual / out-of-band release
+## Signing
 
-Actions tab → **Release to internal testers** → Run workflow → optionally
-paste custom release notes. Same pipeline, same gate.
+Current gradle release config is signed with the debug keystore, which
+Firebase App Distribution accepts. Swap to a real release keystore
+before shipping to the Play Store — losing it means you can never
+update the installed app again.
 
 ## Troubleshooting
 
-- **"No artifact URL returned from EAS"** — the build failed upstream.
-  Open expo.dev → Builds to see the error. The verify job still passes;
-  this is purely an EAS issue.
-- **Firebase distribute step rejects the APK** — check
-  `FIREBASE_ANDROID_APP_ID` matches the one in `app.json`'s
-  `android.package` (`com.theetaz.mendlog`).
+- **Gradle fails with `SDK not found`** — export `ANDROID_HOME` (usually
+  `~/Library/Android/sdk` on macOS) and ensure JDK 17 is on `$PATH`.
+- **`android/` doesn't exist** — run `npx expo prebuild --platform android`
+  once to generate it.
+- **Firebase distribute rejects the APK** — check `FIREBASE_APP_ID`
+  matches the one in `app.json`'s `android.package`
+  (`com.theetaz.mendlog`).
 - **Testers don't receive the email** — check the group name and that
   the email address is in **Testers & groups**, not just invited to the
   Firebase project.
-- **Build takes >20 min** — EAS free tier queues behind paid projects at
-  peak times. Not a pipeline bug.
+- **Working tree dirty** — commit or pass `--dirty` to override.

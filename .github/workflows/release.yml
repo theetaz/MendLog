@@ -1,0 +1,119 @@
+name: Release to internal testers
+
+# Fires on merges to main. Runs the same gate as CI, then asks EAS to
+# build an internal APK, downloads the artifact, and ships it to the
+# Firebase App Distribution "field-testers" group. Testers get an email
+# with an install link.
+#
+# Manual trigger: use the "Run workflow" button on the Actions tab when
+# you want to ship an out-of-band build without a merge.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Release notes (optional — defaults to the latest commit message)'
+        required: false
+        type: string
+
+concurrency:
+  # One release at a time; queued runs get cancelled in favour of the latest.
+  group: release-main
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint · Typecheck · Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.18.0'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test -- --ci --silent
+
+  build-and-distribute:
+    name: EAS build · Firebase distribute
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.18.0'
+          cache: 'npm'
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      # EAS build runs in Expo's cloud — this step blocks until the build
+      # artifact is ready. `--wait` streams progress back to the runner.
+      - name: Build Android APK via EAS
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: eas build --platform android --profile preview --non-interactive --wait
+
+      # EAS doesn't return the artifact URL from the `build` command in
+      # machine-readable form, so query the most recent finished build for
+      # this project and platform.
+      - name: Resolve artifact URL
+        id: artifact
+        run: |
+          URL=$(eas build:list \
+            --platform android \
+            --limit 1 \
+            --status finished \
+            --non-interactive \
+            --json \
+            | jq -r '.[0].artifacts.buildUrl')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "No artifact URL returned from EAS" >&2
+            exit 1
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK
+        run: curl -fsSL -o mendlog.apk "${{ steps.artifact.outputs.url }}"
+
+      # Pass user-supplied input through env, never interpolate directly
+      # into the shell — workflow_dispatch inputs can contain quotes or
+      # shell metacharacters.
+      - name: Compose release notes
+        id: notes
+        env:
+          CUSTOM_NOTES: ${{ inputs.release_notes }}
+        run: |
+          {
+            echo 'notes<<NOTES_EOF'
+            if [ -n "$CUSTOM_NOTES" ]; then
+              printf '%s\n' "$CUSTOM_NOTES"
+            else
+              git log -1 --pretty=format:'%s%n%n%b'
+            fi
+            printf '\nCommit: %s\n' "$(git rev-parse --short HEAD)"
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Distribute to Firebase App Distribution
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
+        run: |
+          npx --yes firebase-tools appdistribution:distribute mendlog.apk \
+            --app "$FIREBASE_APP_ID" \
+            --groups "field-testers" \
+            --release-notes "$RELEASE_NOTES"

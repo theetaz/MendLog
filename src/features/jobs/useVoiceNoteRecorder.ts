@@ -7,12 +7,7 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  type ClipRow,
-  createAndUploadClip,
-  fetchClip,
-  invokeTranscribe,
-} from './clipsApi';
+import { type ClipRow, createAndUploadClip } from './clipsApi';
 
 export const RECORDING_OPTIONS: RecordingOptions = {
   extension: '.m4a',
@@ -87,28 +82,17 @@ export function useVoiceNoteRecorder({ userId, onTranscribed }: Options): UseVoi
       const uri = recorder.uri;
       if (!uri) throw new Error('no recording file produced');
 
+      // Save locally — upload + transcription happen asynchronously via
+      // the sync engine once the device is online. The returned row has
+      // null transcripts; consumers show a "processing…" state and render
+      // transcripts later when pull-sync brings them.
       setStage('uploading');
       const row = await createAndUploadClip({ userId, localUri: uri, durationMs });
       setClip(row);
-
-      setStage('processing');
-      const result = await invokeTranscribe(row.id);
-      const latest = await fetchClip(row.id).catch(() => null);
-      const finalClip =
-        latest ??
-        ({
-          ...row,
-          transcript_raw: result.transcript_raw,
-          transcript_clean: result.transcript_clean,
-          transcript_en_raw: result.transcript_en_raw,
-          transcript_en_clean: result.transcript_en_clean,
-          status: 'done',
-        } as ClipRow);
-      setClip(finalClip);
       setStage('done');
-      onTranscribed?.(finalClip);
+      onTranscribed?.(row);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Transcription failed');
+      setError(e instanceof Error ? e.message : 'Saving failed');
       setStage('error');
     }
   }, [elapsedMs, onTranscribed, recorder, recorderState.durationMillis, userId]);

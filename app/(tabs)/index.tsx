@@ -2,13 +2,12 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { useAuth } from '../../src/features/auth/AuthProvider';
 import { HomeScreen } from '../../src/features/home/HomeScreen';
-import { getSupabaseClient } from '../../src/lib/supabase';
-import { SupabaseJobsRepository } from '../../src/repositories/SupabaseJobsRepository';
+import { OfflineJobsRepository } from '../../src/offline/repos/OfflineJobsRepository';
 
 export default function HomeRoute() {
   const router = useRouter();
   const { session } = useAuth();
-  const repo = useMemo(() => new SupabaseJobsRepository(getSupabaseClient()), []);
+  const repo = useMemo(() => new OfflineJobsRepository(), []);
 
   const displayName =
     (session?.user?.user_metadata?.full_name as string | undefined) ??

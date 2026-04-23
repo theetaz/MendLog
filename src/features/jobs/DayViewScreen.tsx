@@ -23,7 +23,7 @@ interface DayViewScreenProps {
   dateIso: string;
   clock?: () => Date;
   onBack(): void;
-  onOpenJob(id: number): void;
+  onOpenJob(id: string): void;
   onNavigateDay(dateIso: string): void;
 }
 
@@ -41,14 +41,14 @@ export function DayViewScreen({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [thumbs, setThumbs] = useState<Map<number, PhotoThumb[]>>(new Map());
+  const [thumbs, setThumbs] = useState<Map<string, PhotoThumb[]>>(new Map());
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const offsetRef = useRef(0);
-  const loadedThumbIdsRef = useRef<Set<number>>(new Set());
+  const loadedThumbIdsRef = useRef<Set<string>>(new Set());
 
   // Stable callback — reads the already-loaded set from a ref so updating the
   // thumbs state doesn't invalidate loadThumbs and retrigger useFocusEffect.

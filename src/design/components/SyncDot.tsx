@@ -2,29 +2,40 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { fonts, type ThemeColors, useColors } from '../tokens';
 
-export type SyncState = 'synced' | 'pending' | 'offline';
+// Five states to match the job-level sync classifier. `pending` is kept as
+// an alias for `uploading` so legacy callers (and the simpler AppBar
+// derivation) don't have to change.
+export type SyncState = 'synced' | 'processing' | 'uploading' | 'pending' | 'error' | 'offline';
 
 interface SyncDotProps {
   state?: SyncState;
+  hideLabel?: boolean;
 }
 
-export function SyncDot({ state = 'synced' }: SyncDotProps) {
+function paint(state: SyncState, colors: ThemeColors) {
+  switch (state) {
+    case 'synced':
+      return { color: colors.emerald, label: 'Synced' };
+    case 'processing':
+      return { color: colors.navy, label: 'Processing' };
+    case 'uploading':
+    case 'pending':
+      return { color: colors.amber, label: 'Uploading' };
+    case 'error':
+      return { color: colors.red, label: 'Needs attention' };
+    case 'offline':
+      return { color: colors.mute, label: 'Offline' };
+  }
+}
+
+export function SyncDot({ state = 'synced', hideLabel = false }: SyncDotProps) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { color, label } = useMemo(() => {
-    switch (state) {
-      case 'synced':
-        return { color: colors.emerald, label: 'Synced' };
-      case 'pending':
-        return { color: colors.amber, label: 'Pending' };
-      case 'offline':
-        return { color: colors.red, label: 'Offline' };
-    }
-  }, [colors, state]);
+  const { color, label } = useMemo(() => paint(state, colors), [colors, state]);
   return (
     <View style={styles.row}>
       <View style={[styles.dot, { backgroundColor: color }]} />
-      <Text style={styles.label}>{label}</Text>
+      {!hideLabel && <Text style={styles.label}>{label}</Text>}
     </View>
   );
 }

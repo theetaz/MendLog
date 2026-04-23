@@ -1,5 +1,14 @@
-import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseClient } from '../../lib/supabase';
+import NetInfo from '@react-native-community/netinfo';
+import { eq } from 'drizzle-orm';
+import { db } from '../../offline/db';
+import { notifyLocalDataChanged } from '../../offline/dataBus';
+import { job_clips } from '../../offline/schema';
+import { newId } from '../../offline/uuid';
+
+// Offline-first clips API. Recording writes a local row with `local_uri` and
+// marks it `pending_insert`; the sync engine later uploads the audio blob and
+// invokes the transcribe-clip edge function. Transcripts therefore appear
+// asynchronously once the device is online — the UI renders what it has.
 
 export type ClipStatus =
   | 'pending'
@@ -9,10 +18,12 @@ export type ClipStatus =
   | 'error';
 
 export interface ClipRow {
-  id: number;
-  job_id: number | null;
+  id: string; // local UUID
+  server_id: number | null;
+  job_id: string | null;
   user_id: string;
-  audio_path: string;
+  local_uri: string | null;
+  audio_path: string | null;
   duration_ms: number;
   transcript_raw: string | null;
   transcript_clean: string | null;
@@ -20,111 +31,78 @@ export interface ClipRow {
   transcript_en_clean: string | null;
   status: ClipStatus;
   error: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
+function toClipRow(r: typeof job_clips.$inferSelect): ClipRow {
+  return {
+    id: r.id,
+    server_id: r.server_id,
+    job_id: r.job_id,
+    user_id: r.user_id,
+    local_uri: r.local_uri,
+    audio_path: r.audio_path,
+    duration_ms: r.duration_ms,
+    transcript_raw: r.transcript_raw,
+    transcript_clean: r.transcript_clean,
+    transcript_en_raw: r.transcript_en_raw,
+    transcript_en_clean: r.transcript_en_clean,
+    status: r.status as ClipStatus,
+    error: r.error,
+  };
+}
+
+// Stage a recording locally. No network call — `local_uri` points at the
+// file on device and the sync engine uploads it later.
 export async function createAndUploadClip(params: {
   userId: string;
   localUri: string;
   durationMs: number;
-  client?: SupabaseClient;
 }): Promise<ClipRow> {
-  const client = params.client ?? getSupabaseClient();
-  const filename = `${Date.now()}.m4a`;
-  const audioPath = `${params.userId}/${filename}`;
-
-  const fileRes = await fetch(params.localUri);
-  const bytes = await fileRes.arrayBuffer();
-  if (!bytes.byteLength) throw new Error('recording produced empty file');
-
-  const { error: uploadErr } = await client.storage
-    .from('job-audio')
-    .upload(audioPath, bytes, {
-      contentType: 'audio/m4a',
-      upsert: false,
-    });
-  if (uploadErr) throw new Error(`upload failed: ${uploadErr.message}`);
-
-  const { data, error } = await client
-    .from('job_clips')
-    .insert({
-      audio_path: audioPath,
-      duration_ms: Math.round(params.durationMs),
-    })
-    .select('*')
-    .single();
-
-  if (error || !data) {
-    await client.storage.from('job-audio').remove([audioPath]).catch(() => {});
-    throw new Error(`insert failed: ${error?.message ?? 'no row returned'}`);
-  }
-  return data as ClipRow;
-}
-
-export interface TranscribeResult {
-  ok: true;
-  clip_id: number;
-  transcript_raw: string;
-  transcript_clean: string;
-  transcript_en_raw: string;
-  transcript_en_clean: string;
-}
-
-export async function invokeTranscribe(
-  clipId: number,
-  client?: SupabaseClient,
-): Promise<TranscribeResult> {
-  const c = client ?? getSupabaseClient();
-  const { data, error } = await c.functions.invoke<TranscribeResult>('transcribe-clip', {
-    body: { clip_id: clipId },
+  const id = newId();
+  const nowMs = Date.now();
+  await db.insert(job_clips).values({
+    id,
+    user_id: params.userId,
+    job_id: null,
+    local_uri: params.localUri,
+    audio_path: null,
+    duration_ms: Math.round(params.durationMs),
+    status: 'pending',
+    sync_state: 'pending_insert',
+    upload_state: 'pending',
+    created_at: nowMs,
+    updated_at: nowMs,
   });
-  if (error) throw new Error(`invoke failed: ${error.message}`);
-  if (!data?.ok) throw new Error('invoke returned no result');
-  return data;
+  const inserted = await db.select().from(job_clips).where(eq(job_clips.id, id)).limit(1);
+  notifyLocalDataChanged();
+  return toClipRow(inserted[0]);
 }
 
-export function subscribeToClip(
-  clipId: number,
-  onUpdate: (row: ClipRow) => void,
-  client?: SupabaseClient,
-): () => void {
-  const c = client ?? getSupabaseClient();
-  const channel: RealtimeChannel = c
-    .channel(`clip-${clipId}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'job_clips',
-        filter: `id=eq.${clipId}`,
-      },
-      (payload) => {
-        const row = payload.new as ClipRow | undefined;
-        if (row) onUpdate(row);
-      },
-    )
-    .subscribe();
-
-  return () => {
-    c.removeChannel(channel).catch(() => {});
-  };
+export async function fetchClip(clipId: string): Promise<ClipRow | null> {
+  const rows = await db.select().from(job_clips).where(eq(job_clips.id, clipId)).limit(1);
+  return rows[0] ? toClipRow(rows[0]) : null;
 }
 
-/**
- * Ad-hoc audio-to-English via the `transcribe-audio` edge function.
- * Doesn't persist anything — use for voice-into-form-field dictation.
- *
- * React Native can't build Blobs from ArrayBuffers, so we POST directly with
- * the native {uri, name, type} FormData file shape and let the platform
- * stream the file.
- */
-export async function transcribeAudioOnce(
-  localUri: string,
-  client?: SupabaseClient,
-): Promise<string> {
-  const c = client ?? getSupabaseClient();
+// Attach a previously-recorded clip to a job. Marks pending_update so the
+// sync engine re-pushes the FK change.
+export async function linkClipToJob(clipId: string, jobId: string): Promise<void> {
+  await db
+    .update(job_clips)
+    .set({ job_id: jobId, sync_state: 'pending_update', updated_at: Date.now() })
+    .where(eq(job_clips.id, clipId));
+  notifyLocalDataChanged();
+}
+
+// Dictation — voice into a form field. This is strictly online: the edge
+// function does whisper + GPT cleanup in one request. We surface a clear
+// error offline so the VoiceTextArea can show a friendly prompt.
+export async function transcribeAudioOnce(localUri: string): Promise<string> {
+  const net = await NetInfo.fetch();
+  if (!net.isConnected || net.isInternetReachable === false) {
+    throw new Error('OFFLINE: dictation requires an internet connection');
+  }
+  const { getSupabaseClient } = await import('../../lib/supabase');
+  const c = getSupabaseClient();
   const { data: sessionData } = await c.auth.getSession();
   const token = sessionData.session?.access_token;
   if (!token) throw new Error('not authenticated');
@@ -142,10 +120,7 @@ export async function transcribeAudioOnce(
 
   const res = await fetch(`${supabaseUrl}/functions/v1/transcribe-audio`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: anonKey,
-    },
+    headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
     body: form,
   });
   if (!res.ok) {
@@ -157,16 +132,6 @@ export async function transcribeAudioOnce(
   return (data.text ?? '').trim();
 }
 
-export async function fetchClip(
-  clipId: number,
-  client?: SupabaseClient,
-): Promise<ClipRow | null> {
-  const c = client ?? getSupabaseClient();
-  const { data, error } = await c
-    .from('job_clips')
-    .select('*')
-    .eq('id', clipId)
-    .maybeSingle();
-  if (error) throw new Error(`fetch failed: ${error.message}`);
-  return (data as ClipRow | null) ?? null;
+export function isOfflineError(e: unknown): boolean {
+  return e instanceof Error && e.message.startsWith('OFFLINE:');
 }

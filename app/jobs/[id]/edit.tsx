@@ -7,22 +7,21 @@ export default function JobEditRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { session } = useAuth();
-  const jobId = Number(id);
   const userId = session?.user?.id ?? null;
 
   const handleClose = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace(`/jobs/${jobId}` as never);
-  }, [router, jobId]);
+    else router.replace(`/jobs/${id}` as never);
+  }, [router, id]);
 
   const handleDeleted = useCallback(() => {
     router.replace('/(tabs)/jobs' as never);
   }, [router]);
 
-  if (!Number.isFinite(jobId) || !userId) return null;
+  if (!id || !userId) return null;
   return (
     <JobEditScreen
-      jobId={jobId}
+      jobId={id}
       userId={userId}
       onClose={handleClose}
       onDeleted={handleDeleted}

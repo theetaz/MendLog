@@ -9,6 +9,7 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -17,7 +18,8 @@ import {
 } from 'react-native';
 import { Icon } from '../../design/components/Icon';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
-import { transcribeAudioOnce } from '../../features/jobs/clipsApi';
+import { isOfflineError, transcribeAudioOnce } from '../../features/jobs/clipsApi';
+import { useOptionalSync } from '../../offline/syncManager';
 
 // Whisper-optimal + emulator-friendly
 const RECORDING_OPTIONS: RecordingOptions = {
@@ -61,6 +63,8 @@ export function VoiceTextArea({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const recorder = useAudioRecorder(RECORDING_OPTIONS);
   const recorderState = useAudioRecorderState(recorder, 500);
+  const syncCtx = useOptionalSync();
+  const online = syncCtx?.online ?? true;
   const [stage, setStage] = useState<Stage>('idle');
   const [micError, setMicError] = useState<string | null>(null);
 
@@ -90,15 +94,32 @@ export function VoiceTextArea({
       }
       setStage('idle');
     } catch (e) {
-      setMicError(e instanceof Error ? e.message : 'Transcription failed');
+      if (isOfflineError(e)) {
+        Alert.alert(
+          'Dictation needs internet',
+          'Voice-to-text uses an online service. Connect to the internet and try again, or type your note directly. You can still record voice memos offline from the job form.',
+        );
+      } else {
+        setMicError(e instanceof Error ? e.message : 'Transcription failed');
+      }
       setStage('idle');
     }
   }, [onChangeText, recorder, value]);
 
   const handleMicPress = useCallback(() => {
+    // Gate dictation at the entry point so the user isn't left holding a
+    // useless recording. A quick alert explains why and points them to the
+    // offline-friendly voice-note feature on the job form.
+    if (stage === 'idle' && !online) {
+      Alert.alert(
+        'Dictation needs internet',
+        "You're offline — dictation requires a live connection. Type your note directly, or use the Voice note button on the job form to record audio for later transcription.",
+      );
+      return;
+    }
     if (stage === 'idle') startRecording();
     else if (stage === 'recording') stopAndTranscribe();
-  }, [stage, startRecording, stopAndTranscribe]);
+  }, [online, stage, startRecording, stopAndTranscribe]);
 
   const secs = Math.floor((recorderState.durationMillis ?? 0) / 1000);
 
@@ -143,14 +164,28 @@ export function VoiceTextArea({
           style={({ pressed }) => [
             styles.micBtn,
             stage === 'recording' && styles.micBtnActive,
+            !online && stage === 'idle' && styles.micBtnDisabled,
             pressed && styles.pressed,
           ]}
           hitSlop={8}
+          accessibilityLabel={
+            !online && stage === 'idle'
+              ? 'Dictation disabled — offline'
+              : stage === 'recording'
+                ? 'Stop dictation'
+                : 'Start dictation'
+          }
         >
           <Icon
             name={stage === 'recording' ? 'pause' : 'mic'}
             size={18}
-            color={stage === 'recording' ? '#fff' : colors.navy}
+            color={
+              stage === 'recording'
+                ? '#fff'
+                : !online && stage === 'idle'
+                  ? colors.mute
+                  : colors.navy
+            }
             weight={2}
           />
         </Pressable>
@@ -237,6 +272,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   micBtnActive: {
     backgroundColor: colors.red,
     borderColor: colors.red,
+  },
+  micBtnDisabled: {
+    backgroundColor: colors.lineSoft,
+    borderColor: colors.line,
+    opacity: 0.7,
   },
   pressed: { opacity: 0.8 },
   errorText: {

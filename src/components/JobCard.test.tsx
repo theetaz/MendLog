@@ -4,7 +4,7 @@ import { STATUS_TONES } from './jobStatus';
 import type { Job } from '../types/job';
 
 const FIXTURE: Job = {
-  id: 127,
+  id: '127',
   machine: 'Injection Molder #3',
   dept: 'Moulding',
   inv: 'INV-0331',

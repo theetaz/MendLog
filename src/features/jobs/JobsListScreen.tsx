@@ -18,7 +18,7 @@ import type { Job } from '../../types/job';
 interface JobsListScreenProps {
   repo: JobsRepository;
   clock?: () => Date;
-  onOpenJob(id: number): void;
+  onOpenJob(id: string): void;
 }
 
 type Row = { kind: 'header'; key: string; label: string } | { kind: 'job'; key: string; job: Job };
@@ -85,7 +85,7 @@ interface JobsListBodyProps {
   clock?: () => Date;
   refreshing: boolean;
   onRefresh(): void;
-  onOpenJob(id: number): void;
+  onOpenJob(id: string): void;
 }
 
 export function JobsListBody({

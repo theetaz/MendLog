@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
+import { subscribeLocalDataChanges } from '../../offline/dataBus';
+import { errorMessage } from '../../offline/errors';
 import type { ActivityDay, Job } from '../../types/job';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import { formatIdle } from '../../utils/idle';
@@ -56,6 +58,11 @@ export function useHomeData(
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
 
+  // Any local mutation (saveJob, deletePhoto, sync pull, etc.) bumps the bus
+  // so the list refetches immediately — modal dismiss on iOS doesn't always
+  // re-fire useFocusEffect, which made new offline jobs look invisible.
+  useEffect(() => subscribeLocalDataChanges(reload), [reload]);
+
   useEffect(() => {
     let cancelled = false;
     const todayIso = isoDate(clock());
@@ -89,7 +96,7 @@ export function useHomeData(
         setState((prev) => ({
           ...prev,
           loading: false,
-          error: err instanceof Error ? err : new Error(String(err)),
+          error: err instanceof Error ? err : new Error(errorMessage(err)),
         }));
       }
     })();

@@ -5,7 +5,6 @@ import { JobDetailScreen } from '../../../src/features/jobs/JobDetailScreen';
 export default function JobDetailRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const jobId = Number(id);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -13,14 +12,12 @@ export default function JobDetailRoute() {
   }, [router]);
 
   const handleEdit = useCallback(
-    (id: number) => {
-      router.push(`/jobs/${id}/edit` as never);
+    (jobId: string) => {
+      router.push(`/jobs/${jobId}/edit` as never);
     },
     [router],
   );
 
-  if (!Number.isFinite(jobId)) {
-    return null;
-  }
-  return <JobDetailScreen jobId={jobId} onBack={handleBack} onEdit={handleEdit} />;
+  if (!id) return null;
+  return <JobDetailScreen jobId={id} onBack={handleBack} onEdit={handleEdit} />;
 }

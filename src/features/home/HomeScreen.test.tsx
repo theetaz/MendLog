@@ -53,7 +53,7 @@ describe('HomeScreen', () => {
     );
     await waitFor(() => expect(screen.queryByTestId('home-loading')).toBeNull());
     fireEvent.press(screen.getByTestId('home-today-card-127'));
-    expect(onOpenJob).toHaveBeenCalledWith(127);
+    expect(onOpenJob).toHaveBeenCalledWith('127');
   });
 
   it('renders an error banner when the repository fails', async () => {

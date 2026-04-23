@@ -4,7 +4,9 @@ import { fonts, radii, type ThemeColors, useColors } from '../design/tokens';
 import { Icon } from '../design/components/Icon';
 import { LangBadge } from '../design/components/LangBadge';
 import { Pill } from '../design/components/Pill';
+import { SyncBadge } from '../design/components/SyncBadge';
 import type { Job } from '../types/job';
+import { formatJobId } from '../utils/formatId';
 import { formatIdle } from '../utils/idle';
 import { type AvatarPhoto, JobAvatar } from './JobAvatar';
 import { statusTone } from './jobStatus';
@@ -48,8 +50,9 @@ export function JobCard({ job, variant = 'full', photos, onPress, testID }: JobC
         />
         <View style={styles.compactBody}>
           <View style={styles.compactHeader}>
-            <Text style={styles.compactId}>#{job.id}</Text>
+            <Text style={styles.compactId}>#{formatJobId(job.id)}</Text>
             <LangBadge lang={job.lang} />
+            {job.syncState && <SyncBadge state={job.syncState} variant="compact" />}
             <View style={styles.compactStatus}>
               <Pill bg={tone.bg} color={tone.fg}>
                 {tone.label}
@@ -81,9 +84,12 @@ export function JobCard({ job, variant = 'full', photos, onPress, testID }: JobC
             {job.dept} · {job.time} · {idle} idle
           </Text>
         </View>
-        <Pill bg={tone.bg} color={tone.fg}>
-          {tone.label}
-        </Pill>
+        <View style={styles.horizontalRight}>
+          {job.syncState && <SyncBadge state={job.syncState} variant="compact" />}
+          <Pill bg={tone.bg} color={tone.fg}>
+            {tone.label}
+          </Pill>
+        </View>
       </Pressable>
     );
   }
@@ -92,11 +98,12 @@ export function JobCard({ job, variant = 'full', photos, onPress, testID }: JobC
     <Pressable testID={testID} onPress={onPress} style={styles.fullCard}>
       <View style={styles.fullBody}>
         <View style={styles.fullHeader}>
-          <Text style={styles.fullId}>#{job.id}</Text>
+          <Text style={styles.fullId}>#{formatJobId(job.id)}</Text>
           <Pill bg={tone.bg} color={tone.fg}>
             {tone.label}
           </Pill>
           <View style={styles.spacer} />
+          {job.syncState && <SyncBadge state={job.syncState} variant="compact" />}
           <LangBadge lang={job.lang} />
         </View>
         <Text style={styles.fullMachine}>{job.machine}</Text>
@@ -205,6 +212,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 12,
     color: colors.mute,
     marginTop: 2,
+  },
+  horizontalRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   fullCard: {
     flexDirection: 'row',

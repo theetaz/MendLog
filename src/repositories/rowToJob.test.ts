@@ -25,7 +25,7 @@ const ROW: JobRow = {
 describe('rowToJob', () => {
   it('maps db columns to the Job shape', () => {
     const job = rowToJob(ROW);
-    expect(job.id).toBe(127);
+    expect(job.id).toBe('127');
     expect(job.machine).toBe('Injection Molder #3');
     expect(job.dept).toBe('Moulding');
     expect(job.inv).toBe('INV-0331');
@@ -50,8 +50,13 @@ describe('rowToJob', () => {
     expect(job.inv).toBe('');
   });
 
-  it('coerces bigint-shaped id (string) to number', () => {
-    const job = rowToJob({ ...ROW, id: '127' as unknown as number });
-    expect(job.id).toBe(127);
+  it('stringifies a numeric bigserial id', () => {
+    const job = rowToJob({ ...ROW, id: 127 });
+    expect(job.id).toBe('127');
+  });
+
+  it('passes through an already-stringified id', () => {
+    const job = rowToJob({ ...ROW, id: '127' });
+    expect(job.id).toBe('127');
   });
 });

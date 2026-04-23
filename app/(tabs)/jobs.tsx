@@ -1,12 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { JobsTabScreen } from '../../src/features/jobs/JobsTabScreen';
-import { getSupabaseClient } from '../../src/lib/supabase';
-import { SupabaseJobsRepository } from '../../src/repositories/SupabaseJobsRepository';
+import { OfflineJobsRepository } from '../../src/offline/repos/OfflineJobsRepository';
 
 export default function JobsRoute() {
   const router = useRouter();
-  const repo = useMemo(() => new SupabaseJobsRepository(getSupabaseClient()), []);
+  const repo = useMemo(() => new OfflineJobsRepository(), []);
   return (
     <JobsTabScreen
       repo={repo}

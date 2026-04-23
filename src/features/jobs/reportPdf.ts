@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { statusToneFor } from '../../components/jobStatus';
 import { colors } from '../../design/palette';
+import { formatJobId } from '../../utils/formatId';
 import { formatIdle } from '../../utils/idle';
 import type { JobDetail, PhotoWithUrl } from './jobsApi';
 
@@ -40,7 +41,7 @@ function buildFilename(detail: JobDetail): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40) || 'job';
-  return `MendLog-Job-${detail.job.id}-${slug}.pdf`;
+  return `MendLog-Job-${formatJobId(detail.job.id)}-${slug}.pdf`;
 }
 
 export function buildReportHtml(detail: JobDetail): string {
@@ -81,7 +82,7 @@ export function buildReportHtml(detail: JobDetail): string {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(`MendLog Job #${job.id}`)}</title>
+  <title>${escapeHtml(`MendLog Job #${formatJobId(job.id)}`)}</title>
   <style>${styles(tone.bg, tone.fg)}</style>
 </head>
 <body>
@@ -98,7 +99,7 @@ export function buildReportHtml(detail: JobDetail): string {
 
   <section class="title-block">
     <div class="title-row">
-      <span class="job-id">JOB #${job.id}</span>
+      <span class="job-id">JOB #${formatJobId(job.id)}</span>
       <span class="pill">${escapeHtml(tone.label)}</span>
     </div>
     <h1 class="title">${escapeHtml(job.machine || 'Untitled job')}</h1>
@@ -127,7 +128,7 @@ export function buildReportHtml(detail: JobDetail): string {
   ${photosBlock}
 
   <footer class="bottom">
-    <span>MendLog · Job #${job.id}</span>
+    <span>MendLog · Job #${formatJobId(job.id)}</span>
     <span>${escapeHtml(generatedAt)}</span>
   </footer>
 </body>

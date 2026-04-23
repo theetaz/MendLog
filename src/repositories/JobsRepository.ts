@@ -8,6 +8,6 @@ export interface JobsPage {
 export interface JobsRepository {
   listJobs(): Promise<Job[]>;
   listJobsForDate(dateIso: string, opts?: { limit?: number; offset?: number }): Promise<JobsPage>;
-  getJob(id: number): Promise<Job | null>;
+  getJob(id: string): Promise<Job | null>;
   getActivity(weeks: number): Promise<ActivityDay[]>;
 }

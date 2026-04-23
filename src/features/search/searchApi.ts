@@ -1,5 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { inArray } from 'drizzle-orm';
 import { getSupabaseClient } from '../../lib/supabase';
+import { db } from '../../offline/db';
+import { jobs as jobsTable } from '../../offline/schema';
 import { rowToJob, type JobRow } from '../../repositories/rowToJob';
 import type { Job, JobStatus } from '../../types/job';
 
@@ -93,13 +96,42 @@ export async function searchJobs(
   });
   if (error) throw new Error(`search failed: ${error.message}`);
   const rows = (data ?? []) as JobRow[];
-  return rows.map((row) => {
+
+  // The RPC returns server rows keyed by Supabase's numeric `jobs.id`. The
+  // detail screen reads from local SQLite, which keys on the client UUID and
+  // stores the server id in `server_id`. Without translation, tapping a hit
+  // produces "Job not found" because the numeric id never matches a local row.
+  const serverIds = rows
+    .map((r) => (typeof r.id === 'number' ? r.id : Number(r.id)))
+    .filter((n) => Number.isFinite(n));
+  const localByServerId = new Map<number, string>();
+  if (serverIds.length > 0) {
+    const localRows = await db
+      .select({ id: jobsTable.id, server_id: jobsTable.server_id })
+      .from(jobsTable)
+      .where(inArray(jobsTable.server_id, serverIds));
+    for (const r of localRows) {
+      if (r.server_id != null) localByServerId.set(r.server_id, r.id);
+    }
+  }
+
+  const hits: SearchHit[] = [];
+  for (const row of rows) {
     const job = rowToJob(row);
+    const serverId = typeof row.id === 'number' ? row.id : Number(row.id);
+    const localId = Number.isFinite(serverId) ? localByServerId.get(serverId) : undefined;
+    if (!localId) {
+      // Matched on the server but not mirrored locally (e.g. older than the
+      // pull window on this device). Skip rather than ship a broken link;
+      // pull-on-demand can be added later if this gap matters.
+      continue;
+    }
     const hit = q ? extractSnippet(q, job) : null;
-    return {
-      job,
+    hits.push({
+      job: { ...job, id: localId },
       snippet: hit?.snippet ?? null,
       matchedField: hit?.field ?? null,
-    };
-  });
+    });
+  }
+  return hits;
 }

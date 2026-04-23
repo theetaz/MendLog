@@ -14,6 +14,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../features/auth/AuthProvider';
 import { getSupabaseClient } from '../lib/supabase';
 import { ensureBackgroundSyncRegistered } from './backgroundSync';
+import { ensureUserScopedDataForSession } from './clearSession';
 import { subscribeLocalDataChanges } from './dataBus';
 import { subscribeRealtimeUpdates } from './realtime';
 import { dispatchAllPendingAI } from './sync/aiDispatch';
@@ -229,13 +230,29 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
   // local DB gets populated without waiting for the 30s debounce. Screens
   // read from local, so an empty mirror on cold start would show blank
   // lists; this fills them right away when online.
-  const didInitialSync = useRef(false);
+  //
+  // Before syncing we also run ensureUserScopedDataForSession: if the on-disk
+  // data belongs to a different user (interrupted logout, account switch),
+  // wipe it first so the incoming user never sees the previous user's jobs.
+  // Keyed on userId so a within-session account switch re-runs the check.
+  const initialSyncFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!userId || didInitialSync.current) return;
-    didInitialSync.current = true;
-    void runDataLane();
-    void runCatalogLane();
-  }, [userId, runDataLane, runCatalogLane]);
+    if (!userId || initialSyncFor.current === userId) return;
+    initialSyncFor.current = userId;
+    void (async () => {
+      try {
+        await ensureUserScopedDataForSession(userId);
+      } catch {
+        // If the mismatch check itself fails we still proceed with the
+        // sync — runDataLane's pull is user-scoped, so any stale rows
+        // that remain are a UI-level leak (covered by the logout wipe on
+        // a normal flow) rather than a server-side authorization issue.
+      }
+      await refreshMeta();
+      void runDataLane();
+      void runCatalogLane();
+    })();
+  }, [userId, runDataLane, runCatalogLane, refreshMeta]);
 
   // Background task — ask the OS to wake us roughly every 15 minutes so
   // pending writes still reach the server when the app isn't in use. The

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { JobCard } from '../../components/JobCard';
-import { AppBar, Icon, SectionLabel } from '../../design/components';
+import { AppBar, Icon } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import { subscribeLocalDataChanges } from '../../offline/dataBus';
 import type { JobsRepository } from '../../repositories/JobsRepository';

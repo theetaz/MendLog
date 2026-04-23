@@ -54,8 +54,8 @@ function buildMonth(
   return { year, month, label, weeks };
 }
 
-function trailingMonths(anchor: Date, n: number): Array<{ year: number; month: number }> {
-  const out: Array<{ year: number; month: number }> = [];
+function trailingMonths(anchor: Date, n: number): { year: number; month: number }[] {
+  const out: { year: number; month: number }[] = [];
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1);
     out.push({ year: d.getFullYear(), month: d.getMonth() });

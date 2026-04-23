@@ -16,7 +16,7 @@ import { AppBar, Btn, Icon, SectionLabel } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import { formatIdle } from '../../utils/idle';
-import { useTheme, type ThemeMode } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
 import { SyncSection } from './SyncSection';
 import { useProfileData } from './useProfileData';
 
@@ -69,6 +69,9 @@ export function MeScreen({
   const [nameDraft, setNameDraft] = useState(displayName ?? '');
   const [savingName, setSavingName] = useState(false);
   const data = useProfileData(repo ?? null);
+  // See HomeScreen for the rationale — destructure so the focus-effect hook
+  // depends on the stable callback, not the full data object.
+  const { reload: reloadData } = data;
   const { mode, setMode } = useTheme();
 
   useEffect(() => {
@@ -112,8 +115,8 @@ export function MeScreen({
 
   useFocusEffect(
     useCallback(() => {
-      if (repo) data.reload();
-    }, [data.reload, repo]),
+      if (repo) reloadData();
+    }, [reloadData, repo]),
   );
 
   const handleSignOut = useCallback(() => {

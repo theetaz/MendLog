@@ -343,7 +343,7 @@ function ClearRecents({ onPress, styles }: { onPress(): void; styles: ReturnType
 function HighlightedText({ text, query, styles }: { text: string; query: string; styles: ReturnType<typeof makeStyles> }) {
   const q = query.trim();
   if (!q) return <Text style={styles.snippetText}>{text}</Text>;
-  const parts: Array<{ text: string; match: boolean }> = [];
+  const parts: { text: string; match: boolean }[] = [];
   const lower = text.toLowerCase();
   const qlow = q.toLowerCase();
   let i = 0;

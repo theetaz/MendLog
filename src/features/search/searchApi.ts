@@ -47,7 +47,7 @@ export function extractSnippet(
   const q = query.trim().toLowerCase();
   if (!q) return null;
 
-  const fields: Array<{ key: string; value: string }> = [
+  const fields: { key: string; value: string }[] = [
     { key: 'Description', value: job.desc },
     { key: 'Root cause', value: job.rootCause },
     { key: 'Corrective action', value: job.action },

@@ -3,7 +3,7 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { AuthProvider, useAuth } from './AuthProvider';
 
 function makeFakeClient(initial: Session | null) {
-  const listeners: Array<(event: string, s: Session | null) => void> = [];
+  const listeners: ((event: string, s: Session | null) => void)[] = [];
   const signInMock = jest.fn(async ({ email }: { email: string; password: string }) => {
     if (email === 'bad@x.com') return { data: null, error: { message: 'Invalid login' } };
     const s = { user: { email } } as unknown as Session;

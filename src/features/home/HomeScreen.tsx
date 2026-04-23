@@ -35,6 +35,10 @@ export function HomeScreen({
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const data = useHomeData(repo, clock);
+  // Hoist the stable callback out of `data` so the hooks below can depend on
+  // it directly. Satisfies react-hooks/exhaustive-deps without having to list
+  // the whole data object (which changes identity on every reload).
+  const { reload } = data;
   const insets = useSafeAreaInsets();
   const todayIso = todayIsoLocal(clock());
   const visibleToday = data.today.slice(0, TODAY_PREVIEW_LIMIT);
@@ -45,17 +49,17 @@ export function HomeScreen({
   // Refresh whenever Home regains focus (e.g. returning from New Job, Edit).
   useFocusEffect(
     useCallback(() => {
-      data.reload();
-    }, [data.reload]),
+      reload();
+    }, [reload]),
   );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    data.reload();
+    reload();
     // Let the data hook's loading flag indicate when fetch is done, but keep
     // the control visible for a minimum short beat so it doesn't flicker.
     setTimeout(() => setRefreshing(false), 350);
-  }, [data]);
+  }, [reload]);
 
   const activityCounts = useMemo(() => {
     const map = new Map<string, number>();

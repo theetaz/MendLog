@@ -67,7 +67,7 @@ export function computeProfileStreaks(
   // Walk back from today
   let currentStreak = 0;
   const cursor = new Date(`${todayIso}T00:00:00Z`);
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const iso = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(
       2,

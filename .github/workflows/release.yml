@@ -112,8 +112,12 @@ jobs:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
           RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
+          # Override by setting repo/org variable FIREBASE_TESTER_GROUPS
+          # (comma-separated group aliases). Each alias must exist in
+          # Firebase App Distribution → Testers & Groups.
+          TESTER_GROUPS: ${{ vars.FIREBASE_TESTER_GROUPS || 'field-testers' }}
         run: |
           npx --yes firebase-tools appdistribution:distribute mendlog.apk \
             --app "$FIREBASE_APP_ID" \
-            --groups "field-testers" \
+            --groups "$TESTER_GROUPS" \
             --release-notes "$RELEASE_NOTES"

@@ -1,14 +1,25 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { and, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import { db } from '../db';
 import { notifyLocalDataChanged } from '../dataBus';
 import { errorMessage } from '../errors';
 import { job_clips, job_photos, jobs } from '../schema';
+import { dispatchAllPendingAI } from './aiDispatch';
 import { pullCatalog } from './catalog';
-import { pullClips, pushClips } from './clips';
-import { pullJobs, pushJobs } from './jobs';
+import {
+  pullClips,
+  pushClipDeletes,
+  pushClips,
+  reconcileStuckClipTranscripts,
+} from './clips';
+import { pullJobs, pushJobDeletes, pushJobs } from './jobs';
 import { getMetaNumber } from './meta';
-import { pullPhotos, pushPhotos } from './photos';
+import {
+  pullPhotos,
+  pushPhotoDeletes,
+  pushPhotos,
+  reconcileStuckPhotoAnnotations,
+} from './photos';
 import { drainClipUploads, drainPhotoUploads, pendingUploadCount } from './uploadQueue';
 
 export interface SyncCounts {
@@ -16,6 +27,13 @@ export interface SyncCounts {
   pendingPhotos: number;
   pendingClips: number;
   pendingUploads: number;
+  // AI-workflow counts: rows that are fully pushed but still waiting on
+  // annotate-photo / transcribe-clip. Broken out so the UI can say
+  // "2 photos processing AI" distinct from "3 photos uploading".
+  photosProcessing: number;
+  photosError: number;
+  clipsProcessing: number;
+  clipsError: number;
 }
 
 export interface SyncResult {
@@ -40,13 +58,31 @@ export async function runDataSync(
     await drainClipUploads(client);
     await pushPhotos(client);
     await pushClips(client);
+    // Drain tombstones: children first so the parent-job delete doesn't
+    // hit a foreign-key violation. Local hard-deletes happen inside each
+    // push* function after the server side clears.
+    await pushPhotoDeletes(client);
+    await pushClipDeletes(client);
+    await pushJobDeletes(client);
     await pullJobs(client, userId, { full: opts.full });
     // Pull the server-side-populated fields (AI descriptions/tags, clip
-    // transcripts). Runs last so any server work triggered during push
-    // (annotate-photo, transcribe-clip) has a chance to complete before
-    // our cursor advances. Callers that need the latest can re-trigger.
+    // transcripts). Runs after push so any server work triggered during
+    // push has a chance to complete before our cursor advances.
     await pullPhotos(client, userId);
     await pullClips(client, userId);
+    // Reconcile rows stuck locally in `annotating` / `transcribing` for
+    // longer than the stale threshold. The cursor-based pull above won't
+    // catch them if their server `updated_at` already fell behind our
+    // cursor (realtime previously merged, then a race overwrote the
+    // status). Targeted refetch by server_id always re-merges.
+    await reconcileStuckPhotoAnnotations(client);
+    await reconcileStuckClipTranscripts(client);
+    // Self-heal: any row whose `status` is still `pending` or `error`
+    // after pull never had a successful edge-function invoke (or the
+    // previous attempt failed). Re-dispatch, capped so a big offline
+    // batch doesn't fan out hundreds of calls. Realtime picks up the
+    // eventual status changes.
+    await dispatchAllPendingAI(client);
     notifyLocalDataChanged();
     return { ok: true, durationMs: Date.now() - started };
   } catch (e) {
@@ -93,6 +129,8 @@ export async function getSyncCounts(): Promise<SyncCounts> {
     await db.select({ id: jobs.id }).from(jobs).where(ne(jobs.sync_state, 'synced'))
   ).length;
 
+  // Count rows that are ready to push: either a live row with its file
+  // uploaded (insert/update path), or a tombstone ready to be drained.
   const pendingPhotos = (
     await db
       .select({ id: job_photos.id })
@@ -100,8 +138,10 @@ export async function getSyncCounts(): Promise<SyncCounts> {
       .where(
         and(
           ne(job_photos.sync_state, 'synced'),
-          isNotNull(job_photos.storage_path),
-          isNull(job_photos.deleted_at),
+          or(
+            and(isNotNull(job_photos.storage_path), isNull(job_photos.deleted_at)),
+            eq(job_photos.sync_state, 'pending_delete'),
+          ),
         ),
       )
   ).length;
@@ -113,8 +153,76 @@ export async function getSyncCounts(): Promise<SyncCounts> {
       .where(
         and(
           ne(job_clips.sync_state, 'synced'),
+          or(
+            and(isNotNull(job_clips.audio_path), isNull(job_clips.deleted_at)),
+            eq(job_clips.sync_state, 'pending_delete'),
+          ),
+        ),
+      )
+  ).length;
+
+  // Rows where the file + the row have made it to the server, but the
+  // AI workflow hasn't finished yet. Split processing vs error so the UI
+  // can show a retry affordance only when something actually failed.
+  const photosProcessing = (
+    await db
+      .select({ id: job_photos.id })
+      .from(job_photos)
+      .where(
+        and(
+          eq(job_photos.sync_state, 'synced'),
+          isNotNull(job_photos.storage_path),
+          isNull(job_photos.deleted_at),
+          or(
+            eq(job_photos.status, 'pending'),
+            eq(job_photos.status, 'annotating'),
+          ),
+        ),
+      )
+  ).length;
+
+  const photosError = (
+    await db
+      .select({ id: job_photos.id })
+      .from(job_photos)
+      .where(
+        and(
+          eq(job_photos.sync_state, 'synced'),
+          isNotNull(job_photos.storage_path),
+          isNull(job_photos.deleted_at),
+          eq(job_photos.status, 'error'),
+        ),
+      )
+  ).length;
+
+  const clipsProcessing = (
+    await db
+      .select({ id: job_clips.id })
+      .from(job_clips)
+      .where(
+        and(
+          eq(job_clips.sync_state, 'synced'),
           isNotNull(job_clips.audio_path),
           isNull(job_clips.deleted_at),
+          or(
+            eq(job_clips.status, 'pending'),
+            eq(job_clips.status, 'transcribing'),
+            eq(job_clips.status, 'post_processing'),
+          ),
+        ),
+      )
+  ).length;
+
+  const clipsError = (
+    await db
+      .select({ id: job_clips.id })
+      .from(job_clips)
+      .where(
+        and(
+          eq(job_clips.sync_state, 'synced'),
+          isNotNull(job_clips.audio_path),
+          isNull(job_clips.deleted_at),
+          eq(job_clips.status, 'error'),
         ),
       )
   ).length;
@@ -124,6 +232,10 @@ export async function getSyncCounts(): Promise<SyncCounts> {
     pendingPhotos,
     pendingClips,
     pendingUploads: await pendingUploadCount(),
+    photosProcessing,
+    photosError,
+    clipsProcessing,
+    clipsError,
   };
 }
 

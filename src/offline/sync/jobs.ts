@@ -171,6 +171,36 @@ export async function pullJobs(
   await setMetaNumber('jobs.last_pulled_at', maxUpdated);
 }
 
+function isMissingResourceError(msg: string): boolean {
+  const s = msg.toLowerCase();
+  return s.includes('not found') || s.includes('does not exist') || s.includes('no rows');
+}
+
+// Drain job tombstones. Must run AFTER pushPhotoDeletes / pushClipDeletes
+// so the FK constraints on `job_photos.job_id` / `job_clips.job_id` are
+// clear. Rows that never made it to the server (server_id == null) just
+// need a local hard-delete.
+export async function pushJobDeletes(client: SupabaseClient): Promise<void> {
+  const tombstones = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.sync_state, 'pending_delete'));
+
+  for (const row of tombstones) {
+    try {
+      if (row.server_id != null) {
+        const { error } = await client.from('jobs').delete().eq('id', row.server_id);
+        if (error && !isMissingResourceError(error.message)) {
+          throw new Error(error.message);
+        }
+      }
+      await db.delete(jobs).where(eq(jobs.id, row.id));
+    } catch (e) {
+      console.warn('pushJobDeletes row failed', row.id, e);
+    }
+  }
+}
+
 // Exported for the orchestrator to probe whether there's anything to push.
 export async function hasDirtyJobs(): Promise<boolean> {
   const rows = await db

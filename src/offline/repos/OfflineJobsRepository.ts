@@ -6,6 +6,7 @@ import type {
 import type { ActivityDay, Job, JobStatus, Lang } from '../../types/job';
 import { db } from '../db';
 import { job_clips, job_photos, jobs as jobsTable } from '../schema';
+import { computeJobSyncState } from '../syncState';
 
 // JobsRepository implementation that reads entirely from the local SQLite
 // mirror. The sync engine (src/offline/sync) keeps this mirror populated by
@@ -14,6 +15,7 @@ import { job_clips, job_photos, jobs as jobsTable } from '../schema';
 
 interface JobRowLocal {
   id: string;
+  sync_state: string;
   machine: string;
   dept: string;
   inv: string | null;
@@ -29,22 +31,32 @@ interface JobRowLocal {
   remarks: string;
 }
 
-async function countForJob(
-  table: typeof job_photos | typeof job_clips,
-  jobId: string,
-): Promise<number> {
-  const rows = await db
-    .select({ c: sql<number>`count(*)`.as('c') })
-    .from(table)
-    .where(and(eq(table.job_id, jobId), isNull(table.deleted_at)));
-  return Number(rows[0]?.c ?? 0);
+// One query per child table per job — returns only the fields the sync
+// classifier needs, so SQLite can serve them fast even on a cold row.
+async function childrenForJob(row: JobRowLocal) {
+  const [photos, clips] = await Promise.all([
+    db
+      .select({
+        sync_state: job_photos.sync_state,
+        upload_state: job_photos.upload_state,
+        status: job_photos.status,
+      })
+      .from(job_photos)
+      .where(and(eq(job_photos.job_id, row.id), isNull(job_photos.deleted_at))),
+    db
+      .select({
+        sync_state: job_clips.sync_state,
+        upload_state: job_clips.upload_state,
+        status: job_clips.status,
+      })
+      .from(job_clips)
+      .where(and(eq(job_clips.job_id, row.id), isNull(job_clips.deleted_at))),
+  ]);
+  return { photos, clips };
 }
 
 async function toJob(row: JobRowLocal): Promise<Job> {
-  const [photoCount, clipCount] = await Promise.all([
-    countForJob(job_photos, row.id),
-    countForJob(job_clips, row.id),
-  ]);
+  const { photos, clips } = await childrenForJob(row);
   return {
     id: row.id,
     machine: row.machine,
@@ -56,12 +68,13 @@ async function toJob(row: JobRowLocal): Promise<Job> {
     idleMinutes: row.idle_minutes,
     status: row.status as JobStatus,
     lang: row.lang as Lang,
-    photos: photoCount,
-    clips: clipCount,
+    photos: photos.length,
+    clips: clips.length,
     rootCause: row.root_cause,
     desc: row.description,
     action: row.corrective_action,
     remarks: row.remarks,
+    syncState: computeJobSyncState(row, photos, clips),
   };
 }
 

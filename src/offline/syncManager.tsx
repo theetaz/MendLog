@@ -13,7 +13,10 @@ import {
 import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../features/auth/AuthProvider';
 import { getSupabaseClient } from '../lib/supabase';
+import { ensureBackgroundSyncRegistered } from './backgroundSync';
 import { subscribeLocalDataChanges } from './dataBus';
+import { subscribeRealtimeUpdates } from './realtime';
+import { dispatchAllPendingAI } from './sync/aiDispatch';
 import {
   type SyncCounts,
   type SyncResult,
@@ -47,6 +50,7 @@ export interface SyncContextValue {
   triggerCatalog(): Promise<void>;
   triggerAll(): Promise<void>;
   triggerFullHistory(): Promise<void>;
+  triggerAIRetry(): Promise<void>;
   setAutoSync(next: boolean): void;
 }
 
@@ -62,6 +66,10 @@ const EMPTY_COUNTS: SyncCounts = {
   pendingPhotos: 0,
   pendingClips: 0,
   pendingUploads: 0,
+  photosProcessing: 0,
+  photosError: 0,
+  clipsProcessing: 0,
+  clipsError: 0,
 };
 
 const SyncContext = createContext<SyncContextValue | undefined>(undefined);
@@ -180,6 +188,14 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
     await Promise.all([runDataLane(), runCatalogLane()]);
   }, [runDataLane, runCatalogLane]);
 
+  // Re-kick every photo/clip whose AI workflow is still pending or errored.
+  // Used by the Me-screen "Retry AI processing" affordance when the user
+  // wants to force-drain annotations without waiting for the next sync.
+  const triggerAIRetry = useCallback(async () => {
+    await dispatchAllPendingAI(supabase);
+    await refreshMeta();
+  }, [supabase, refreshMeta]);
+
   // "Sync all history" — bypass the 90-day window on the next data pull.
   const triggerFullHistory = useCallback(async () => {
     if (debounceTimer.current) {
@@ -220,6 +236,24 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
     void runDataLane();
     void runCatalogLane();
   }, [userId, runDataLane, runCatalogLane]);
+
+  // Background task — ask the OS to wake us roughly every 15 minutes so
+  // pending writes still reach the server when the app isn't in use. The
+  // handler itself honors the auto-sync toggle and a missing session,
+  // so we register once per mount without further gating here.
+  useEffect(() => {
+    void ensureBackgroundSyncRegistered();
+  }, []);
+
+  // Realtime — subscribe once we know the user. Supabase realtime handles
+  // reconnection internally when the socket drops, so there's no need to
+  // tear down on NetInfo offline events; the scheduled pull catches any
+  // missed updates regardless.
+  useEffect(() => {
+    if (!userId) return;
+    const unsubscribe = subscribeRealtimeUpdates(supabase, userId);
+    return () => unsubscribe();
+  }, [supabase, userId]);
 
   // Network state subscription.
   useEffect(() => {
@@ -266,6 +300,7 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
       triggerCatalog,
       triggerAll,
       triggerFullHistory,
+      triggerAIRetry,
       setAutoSync,
     }),
     [
@@ -278,6 +313,7 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
       triggerCatalog,
       triggerAll,
       triggerFullHistory,
+      triggerAIRetry,
       setAutoSync,
     ],
   );

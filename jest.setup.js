@@ -72,6 +72,21 @@ jest.mock('@react-native-community/netinfo', () => ({
   fetch: jest.fn(async () => ({ isConnected: true, isInternetReachable: true })),
 }));
 
+// Background task + task manager use native modules; tests don't exercise
+// them, so a shallow stub keeps module loads from crashing.
+jest.mock('expo-task-manager', () => ({
+  defineTask: jest.fn(),
+  isTaskRegisteredAsync: jest.fn(async () => false),
+}));
+
+jest.mock('expo-background-task', () => ({
+  BackgroundTaskResult: { Success: 1, Failed: 2 },
+  BackgroundTaskStatus: { Restricted: 1, Available: 2 },
+  getStatusAsync: jest.fn(async () => 2),
+  registerTaskAsync: jest.fn(async () => {}),
+  unregisterTaskAsync: jest.fn(async () => {}),
+}));
+
 // `useFocusEffect` needs a NavigationContainer at runtime. Tests render
 // screens in isolation, so stub it to a plain effect that fires once.
 jest.mock('expo-router', () => {

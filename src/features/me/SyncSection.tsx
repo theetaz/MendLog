@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
-import { Icon, Pill, SectionLabel } from '../../design/components';
+import { Icon, Pill, SectionLabel, SyncBadge } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import { useOptionalSync, type SyncLane, type SyncStatus } from '../../offline/syncManager';
 
@@ -64,6 +64,14 @@ export function SyncSection() {
         colors={colors}
       />
 
+      <AIWorkflowCard
+        counts={sync.counts}
+        online={sync.online}
+        onRetry={sync.triggerAIRetry}
+        styles={styles}
+        colors={colors}
+      />
+
       <LaneCard
         title="Reference data"
         subtitle="Departments & machinery"
@@ -110,6 +118,10 @@ interface Counts {
   pendingPhotos: number;
   pendingClips: number;
   pendingUploads: number;
+  photosProcessing: number;
+  photosError: number;
+  clipsProcessing: number;
+  clipsError: number;
 }
 
 function LaneCard({
@@ -216,6 +228,117 @@ function LaneCard({
   );
 }
 
+// AI workflows run server-side (annotate-photo / transcribe-clip). The
+// sync engine self-heals during each pass, but a dedicated card lets the
+// user see what's in flight and force a retry when something has been
+// stuck for a while.
+function AIWorkflowCard({
+  counts,
+  online,
+  onRetry,
+  styles,
+  colors,
+}: {
+  counts: Counts;
+  online: boolean;
+  onRetry: () => Promise<void>;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
+}) {
+  const rows = [
+    {
+      label: 'Photos processing AI',
+      value: counts.photosProcessing,
+      state: 'processing' as const,
+    },
+    {
+      label: 'Photos with AI errors',
+      value: counts.photosError,
+      state: 'error' as const,
+    },
+    {
+      label: 'Clips being transcribed',
+      value: counts.clipsProcessing,
+      state: 'processing' as const,
+    },
+    {
+      label: 'Clips with transcript errors',
+      value: counts.clipsError,
+      state: 'error' as const,
+    },
+  ].filter((r) => r.value > 0);
+
+  const hasWork = rows.length > 0;
+  const disabled = !online || !hasWork;
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardTitleBlock}>
+          <Text style={styles.cardTitle}>AI workflows</Text>
+          <Text style={styles.cardSubtitle}>
+            Photo descriptions & voice transcripts
+          </Text>
+        </View>
+        <SyncBadge
+          state={
+            !hasWork
+              ? 'synced'
+              : counts.photosError + counts.clipsError > 0
+                ? 'error'
+                : 'processing'
+          }
+        />
+      </View>
+
+      {!hasWork ? (
+        <Text style={styles.metaLine}>Everything is caught up.</Text>
+      ) : (
+        <View style={styles.pendingList}>
+          {rows.map((r) => (
+            <View key={r.label} style={styles.pendingRow}>
+              <View style={styles.pendingLabelRow}>
+                <SyncBadge state={r.state} variant="compact" />
+                <Text style={styles.pendingLabel}>{r.label}</Text>
+              </View>
+              <Text
+                style={[
+                  styles.pendingValue,
+                  r.state === 'error' && { color: colors.red },
+                ]}
+              >
+                {r.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Pressable
+        onPress={() => {
+          if (!disabled) void onRetry();
+        }}
+        disabled={disabled}
+        style={({ pressed }) => [
+          styles.syncBtn,
+          disabled && styles.syncBtnDisabled,
+          pressed && !disabled && styles.pressed,
+        ]}
+      >
+        <Icon
+          name="sparkle"
+          size={14}
+          color={disabled ? colors.mute : colors.navy}
+          weight={2}
+        />
+        <Text style={[styles.syncBtnLabel, disabled && styles.syncBtnLabelDisabled]}>
+          {hasWork ? 'Retry AI processing' : 'Nothing to retry'}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 function statusText(status: SyncStatus): {
   label: string;
   icon: 'check_circle' | 'cloud' | 'cloud_off' | 'warning' | 'refresh';
@@ -303,10 +426,18 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'center',
       paddingVertical: 2,
     },
+    pendingLabelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flex: 1,
+      minWidth: 0,
+    },
     pendingLabel: {
       fontFamily: fonts.sans,
       fontSize: 12,
       color: colors.muteDeep,
+      flexShrink: 1,
     },
     pendingValue: {
       fontFamily: fonts.sansSemiBold,

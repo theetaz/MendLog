@@ -14,8 +14,14 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppBar, Btn, Icon, LangBadge, Pill, SectionLabel } from '../../design/components';
+import { AppBar, Btn, Icon, LangBadge, Pill, SectionLabel, SyncBadge } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
+import { getSupabaseClient } from '../../lib/supabase';
+import {
+  dispatchPendingClipTranscripts,
+  dispatchPendingPhotoAnnotations,
+} from '../../offline/sync/aiDispatch';
+import { useOptionalSync } from '../../offline/syncManager';
 import { formatJobId } from '../../utils/formatId';
 import { formatIdle } from '../../utils/idle';
 import { statusTone } from '../../components/jobStatus';
@@ -33,11 +39,13 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
+  const syncCtx = useOptionalSync();
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   const handleDownload = useCallback(async () => {
     if (!detail || downloading) return;
@@ -88,6 +96,55 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
     setRefreshing(false);
   }, [load]);
 
+  // Retry a single photo's annotation or a single clip's transcription.
+  // Routes through dispatchPendingAI so the optimistic status flip and
+  // the edge-function invoke use the same code path as the sync pass.
+  const retryPhoto = useCallback(
+    async (photoId: string) => {
+      if (retrying) return;
+      if (!syncCtx?.online) {
+        Alert.alert('Offline', 'Connect to the internet to retry this item.');
+        return;
+      }
+      setRetrying(photoId);
+      try {
+        await dispatchPendingPhotoAnnotations(getSupabaseClient(), {
+          photoIds: [photoId],
+        });
+        await load();
+      } finally {
+        setRetrying(null);
+      }
+    },
+    [retrying, syncCtx?.online, load],
+  );
+
+  const retryClip = useCallback(
+    async (clipId: string) => {
+      if (retrying) return;
+      if (!syncCtx?.online) {
+        Alert.alert('Offline', 'Connect to the internet to retry this item.');
+        return;
+      }
+      setRetrying(clipId);
+      try {
+        await dispatchPendingClipTranscripts(getSupabaseClient(), {
+          clipIds: [clipId],
+        });
+        await load();
+      } finally {
+        setRetrying(null);
+      }
+    },
+    [retrying, syncCtx?.online, load],
+  );
+
+  const triggerSyncNow = useCallback(async () => {
+    if (!syncCtx) return;
+    await syncCtx.triggerData();
+    await load();
+  }, [syncCtx, load]);
+
   return (
     <View style={styles.container}>
       <AppBar
@@ -123,12 +180,22 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
             />
           }
         >
-          <JobHeader detail={detail} styles={styles} />
+          <JobHeader
+            detail={detail}
+            styles={styles}
+            onSyncNow={syncCtx ? triggerSyncNow : undefined}
+          />
 
           {detail.photos.length > 0 && (
             <>
               <SectionLabel>{`Photos · ${detail.photos.length}`}</SectionLabel>
-              <PhotoCarousel photos={detail.photos} styles={styles} colors={colors} />
+              <PhotoCarousel
+                photos={detail.photos}
+                styles={styles}
+                colors={colors}
+                onRetry={retryPhoto}
+                retryingId={retrying}
+              />
             </>
           )}
 
@@ -137,7 +204,14 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
               <SectionLabel>{`Voice clips · ${detail.clips.length}`}</SectionLabel>
               <View style={styles.clipsList}>
                 {detail.clips.map((clip) => (
-                  <ClipRow key={clip.id} clip={clip} styles={styles} colors={colors} />
+                  <ClipRow
+                    key={clip.id}
+                    clip={clip}
+                    styles={styles}
+                    colors={colors}
+                    onRetry={retryClip}
+                    isRetrying={retrying === clip.id}
+                  />
                 ))}
               </View>
             </>
@@ -193,8 +267,18 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
   );
 }
 
-function JobHeader({ detail, styles }: { detail: JobDetail; styles: ReturnType<typeof makeStyles> }) {
+function JobHeader({
+  detail,
+  styles,
+  onSyncNow,
+}: {
+  detail: JobDetail;
+  styles: ReturnType<typeof makeStyles>;
+  onSyncNow?: () => void;
+}) {
   const tone = statusTone(detail.job.status);
+  const needsAttention =
+    detail.syncState !== 'synced' && detail.syncState !== 'offline';
   return (
     <View style={styles.headerBlock}>
       <View style={styles.headerRow}>
@@ -209,53 +293,125 @@ function JobHeader({ detail, styles }: { detail: JobDetail; styles: ReturnType<t
       <Text style={styles.headerMeta}>
         {detail.job.dept} · {formatDate(detail.job.date)} · {detail.job.time}
       </Text>
+      <View style={styles.headerSyncRow}>
+        <SyncBadge state={detail.syncState} />
+        {onSyncNow && needsAttention && (
+          <Pressable
+            onPress={onSyncNow}
+            hitSlop={6}
+            style={({ pressed }) => [styles.syncNowLink, pressed && styles.pressed]}
+            accessibilityLabel="Sync this job now"
+          >
+            <Text style={styles.syncNowText}>Sync now</Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
 
-function PhotoCarousel({ photos, styles, colors }: { photos: PhotoWithUrl[]; styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
+function PhotoCarousel({
+  photos,
+  styles,
+  colors,
+  onRetry,
+  retryingId,
+}: {
+  photos: PhotoWithUrl[];
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
+  onRetry: (id: string) => void;
+  retryingId: string | null;
+}) {
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.carousel}
     >
-      {photos.map((photo) => (
-        <View key={photo.id} style={styles.photoCell}>
-          {photo.signed_url ? (
-            <Image
-              source={{ uri: photo.signed_url }}
-              placeholder={photo.blurhash ? { blurhash: photo.blurhash } : undefined}
-              transition={250}
-              contentFit="cover"
-              style={styles.photoImg}
-            />
-          ) : (
-            <View style={[styles.photoImg, styles.photoMissing]}>
-              <Icon name="photo" size={28} color={colors.mute} weight={1.5} />
-            </View>
-          )}
-          {photo.ai_description && (
-            <Text style={styles.photoCaption} numberOfLines={3}>
-              {photo.ai_description}
-            </Text>
-          )}
-          {photo.ai_tags && photo.ai_tags.length > 0 && (
-            <View style={styles.tagsRow}>
-              {photo.ai_tags.slice(0, 4).map((tag) => (
-                <View key={tag} style={styles.tagChip}>
-                  <Text style={styles.tagText}>{tag}</Text>
+      {photos.map((photo) => {
+        const canRetry = photo.syncState === 'error' || photo.syncState === 'processing';
+        const isRetrying = retryingId === photo.id;
+        return (
+          <View key={photo.id} style={styles.photoCell}>
+            <View style={styles.photoImgWrap}>
+              {photo.signed_url ? (
+                <Image
+                  source={{ uri: photo.signed_url }}
+                  placeholder={photo.blurhash ? { blurhash: photo.blurhash } : undefined}
+                  transition={250}
+                  contentFit="cover"
+                  style={styles.photoImg}
+                />
+              ) : (
+                <View style={[styles.photoImg, styles.photoMissing]}>
+                  <Icon name="photo" size={28} color={colors.mute} weight={1.5} />
                 </View>
-              ))}
+              )}
+              {photo.syncState !== 'synced' && (
+                <Pressable
+                  onPress={() => (canRetry ? onRetry(photo.id) : undefined)}
+                  disabled={!canRetry || isRetrying}
+                  style={({ pressed }) => [
+                    styles.photoBadgeOverlay,
+                    pressed && styles.pressed,
+                  ]}
+                  accessibilityLabel={
+                    canRetry ? `Retry AI for this photo` : `Photo sync status`
+                  }
+                >
+                  {isRetrying ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <SyncBadge state={photo.syncState} variant="compact" />
+                  )}
+                </Pressable>
+              )}
             </View>
-          )}
-        </View>
-      ))}
+            {photo.ai_description && (
+              <Text style={styles.photoCaption} numberOfLines={3}>
+                {photo.ai_description}
+              </Text>
+            )}
+            {photo.syncState === 'processing' && !photo.ai_description && (
+              <Text style={styles.photoProcessingHint}>
+                AI is writing a description…
+              </Text>
+            )}
+            {photo.syncState === 'error' && (
+              <Text style={styles.photoErrorHint}>
+                Annotation failed — tap the badge to retry.
+              </Text>
+            )}
+            {photo.ai_tags && photo.ai_tags.length > 0 && (
+              <View style={styles.tagsRow}>
+                {photo.ai_tags.slice(0, 4).map((tag) => (
+                  <View key={tag} style={styles.tagChip}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
 
-function ClipRow({ clip, styles, colors }: { clip: ClipWithUrl; styles: ReturnType<typeof makeStyles>; colors: ThemeColors }) {
+function ClipRow({
+  clip,
+  styles,
+  colors,
+  onRetry,
+  isRetrying,
+}: {
+  clip: ClipWithUrl;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
+  onRetry: (id: string) => void;
+  isRetrying: boolean;
+}) {
   const player = useAudioPlayer(clip.signed_url ?? undefined, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
   const [mode, setMode] = useState<'native' | 'english'>('english');
@@ -273,6 +429,7 @@ function ClipRow({ clip, styles, colors }: { clip: ClipWithUrl; styles: ReturnTy
   const transcriptEn = clip.transcript_en_clean ?? clip.transcript_en_raw ?? '';
   const hasBoth = !!transcriptNative && !!transcriptEn && transcriptNative !== transcriptEn;
   const shown = mode === 'native' ? transcriptNative : transcriptEn;
+  const canRetry = clip.syncState === 'error' || clip.syncState === 'processing';
 
   return (
     <View style={styles.clipCard}>
@@ -306,6 +463,21 @@ function ClipRow({ clip, styles, colors }: { clip: ClipWithUrl; styles: ReturnTy
             />
           </View>
         </View>
+        {clip.syncState !== 'synced' && (
+          <Pressable
+            onPress={() => (canRetry ? onRetry(clip.id) : undefined)}
+            disabled={!canRetry || isRetrying}
+            hitSlop={6}
+            style={({ pressed }) => [pressed && styles.pressed]}
+            accessibilityLabel={canRetry ? 'Retry transcription' : 'Clip sync status'}
+          >
+            {isRetrying ? (
+              <ActivityIndicator size="small" color={colors.navy} />
+            ) : (
+              <SyncBadge state={clip.syncState} variant="compact" />
+            )}
+          </Pressable>
+        )}
       </View>
 
       {hasBoth && (
@@ -320,6 +492,14 @@ function ClipRow({ clip, styles, colors }: { clip: ClipWithUrl; styles: ReturnTy
       )}
 
       {!!shown && <Text style={styles.clipTranscript}>{shown}</Text>}
+      {!shown && clip.syncState === 'processing' && (
+        <Text style={styles.clipProcessingHint}>Transcribing…</Text>
+      )}
+      {!shown && clip.syncState === 'error' && (
+        <Text style={styles.clipErrorHint}>
+          Transcription failed — tap the badge to retry.
+        </Text>
+      )}
     </View>
   );
 }
@@ -431,6 +611,26 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     color: colors.mute,
   },
+  headerSyncRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  syncNowLink: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  syncNowText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 11,
+    color: colors.navy,
+    letterSpacing: 0.2,
+  },
 
   carousel: {
     gap: spacing.sm,
@@ -439,6 +639,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   photoCell: {
     width: PHOTO_SIZE,
     gap: 6,
+  },
+  photoImgWrap: {
+    position: 'relative',
   },
   photoImg: {
     width: PHOTO_SIZE,
@@ -450,11 +653,30 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  photoBadgeOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 2,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
   photoCaption: {
     fontFamily: fonts.sans,
     fontSize: 12,
     lineHeight: 17,
     color: colors.textDim,
+  },
+  photoProcessingHint: {
+    fontFamily: fonts.sans,
+    fontSize: 11.5,
+    color: colors.mute,
+    fontStyle: 'italic',
+  },
+  photoErrorHint: {
+    fontFamily: fonts.sans,
+    fontSize: 11.5,
+    color: colors.red,
   },
   tagsRow: {
     flexDirection: 'row',
@@ -537,6 +759,17 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: colors.text,
+  },
+  clipProcessingHint: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.mute,
+    fontStyle: 'italic',
+  },
+  clipErrorHint: {
+    fontFamily: fonts.sans,
+    fontSize: 12,
+    color: colors.red,
   },
 
   fieldGroup: {

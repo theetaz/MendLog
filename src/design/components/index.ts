@@ -5,5 +5,6 @@ export { Icon, ICON_NAMES, type IconName } from './Icon';
 export { LangBadge } from './LangBadge';
 export { Pill } from './Pill';
 export { SectionLabel } from './SectionLabel';
+export { SyncBadge } from './SyncBadge';
 export { SyncDot, type SyncState } from './SyncDot';
 export { TabBar, type TabId } from './TabBar';

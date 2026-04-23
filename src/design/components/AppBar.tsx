@@ -15,14 +15,18 @@ interface AppBarProps {
   disableTopInset?: boolean;
 }
 
-// Derive the three-state dot color from the full sync context. Offline wins
-// over everything; otherwise "pending" when there's anything dirty or
-// uploading, else "synced".
+// Derive the dot color from the full sync context. Severity order:
+// offline > error > uploading > processing > synced. "processing" is
+// distinct from "uploading" so the user can tell "waiting on AI" apart
+// from "still sending data."
 function derivedSyncState(ctx: ReturnType<typeof useOptionalSync>): SyncState {
   if (!ctx) return 'synced';
   if (!ctx.online) return 'offline';
-  const { pendingJobs, pendingPhotos, pendingClips, pendingUploads } = ctx.counts;
-  if (pendingJobs + pendingPhotos + pendingClips + pendingUploads > 0) return 'pending';
+  const c = ctx.counts;
+  if (c.photosError + c.clipsError > 0) return 'error';
+  const uploading = c.pendingJobs + c.pendingPhotos + c.pendingClips + c.pendingUploads;
+  if (uploading > 0) return 'uploading';
+  if (c.photosProcessing + c.clipsProcessing > 0) return 'processing';
   return 'synced';
 }
 

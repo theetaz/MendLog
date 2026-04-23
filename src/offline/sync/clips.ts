@@ -60,11 +60,8 @@ export async function pushClips(client: SupabaseClient): Promise<void> {
             updated_at: toMs(data.updated_at as string),
           })
           .where(eq(job_clips.id, row.id));
-        // Kick off transcription server-side. Fire-and-forget — pullClips
-        // picks up the eventual transcript fields regardless.
-        client.functions
-          .invoke('transcribe-clip', { body: { clip_id: clipServerId } })
-          .catch((e) => console.warn('transcribe-clip invoke failed:', e));
+        // Transcription kick-off lives in dispatchAllPendingAI so failed
+        // invokes are retried on the next sync instead of silently lost.
       } else {
         const { data, error } = await client
           .from('job_clips')
@@ -89,6 +86,43 @@ export async function pushClips(client: SupabaseClient): Promise<void> {
 
 }
 
+// Merge a remote clip row into local. Mirrors applyRemotePhoto — reused by
+// pullClips and the realtime listener.
+export async function applyRemoteClip(remote: Record<string, unknown>): Promise<boolean> {
+  const serverId = remote.id as number;
+  const remoteMs = toMs(remote.updated_at as string);
+
+  const existing = await db
+    .select()
+    .from(job_clips)
+    .where(eq(job_clips.server_id, serverId))
+    .limit(1);
+  if (existing.length === 0) return false;
+
+  const local = existing[0];
+  if (local.sync_state !== 'synced' && remoteMs <= local.updated_at) return false;
+
+  await db
+    .update(job_clips)
+    .set({
+      audio_path:
+        typeof remote.audio_path === 'string' ? (remote.audio_path as string) : local.audio_path,
+      transcript_raw: (remote.transcript_raw as string | null) ?? local.transcript_raw,
+      transcript_clean: (remote.transcript_clean as string | null) ?? local.transcript_clean,
+      transcript_en_raw:
+        (remote.transcript_en_raw as string | null) ?? local.transcript_en_raw,
+      transcript_en_clean:
+        (remote.transcript_en_clean as string | null) ?? local.transcript_en_clean,
+      status: (remote.status as string) ?? local.status,
+      error: (remote.error as string | null) ?? local.error,
+      updated_at: remoteMs,
+      sync_state: local.sync_state === 'synced' ? 'synced' : local.sync_state,
+    })
+    .where(eq(job_clips.id, local.id));
+
+  return true;
+}
+
 // Pull clip updates — primarily the transcripts written by the
 // `transcribe-clip` edge function after the audio uploads.
 export async function pullClips(client: SupabaseClient, userId: string): Promise<void> {
@@ -109,38 +143,86 @@ export async function pullClips(client: SupabaseClient, userId: string): Promise
 
   let maxUpdated = cursorMs;
   for (const remote of data as Record<string, unknown>[]) {
-    const serverId = remote.id as number;
     const remoteMs = toMs(remote.updated_at as string);
     if (remoteMs > maxUpdated) maxUpdated = remoteMs;
-
-    const existing = await db
-      .select()
-      .from(job_clips)
-      .where(eq(job_clips.server_id, serverId))
-      .limit(1);
-    if (existing.length === 0) continue;
-
-    const local = existing[0];
-    if (local.sync_state !== 'synced' && remoteMs <= local.updated_at) continue;
-
-    await db
-      .update(job_clips)
-      .set({
-        audio_path:
-          typeof remote.audio_path === 'string' ? (remote.audio_path as string) : local.audio_path,
-        transcript_raw: (remote.transcript_raw as string | null) ?? local.transcript_raw,
-        transcript_clean: (remote.transcript_clean as string | null) ?? local.transcript_clean,
-        transcript_en_raw:
-          (remote.transcript_en_raw as string | null) ?? local.transcript_en_raw,
-        transcript_en_clean:
-          (remote.transcript_en_clean as string | null) ?? local.transcript_en_clean,
-        status: (remote.status as string) ?? local.status,
-        error: (remote.error as string | null) ?? local.error,
-        updated_at: remoteMs,
-        sync_state: local.sync_state === 'synced' ? 'synced' : local.sync_state,
-      })
-      .where(eq(job_clips.id, local.id));
+    await applyRemoteClip(remote);
   }
 
   await setMetaNumber('clips.last_pulled_at', maxUpdated);
+}
+
+// Same stuck-row reconciliation as photos — targeted refetch for clips
+// that have been in `transcribing` locally for longer than the threshold,
+// in case a realtime UPDATE was missed or clobbered.
+const STUCK_STALE_MS = 60_000;
+
+export async function reconcileStuckClipTranscripts(
+  client: SupabaseClient,
+): Promise<void> {
+  const cutoff = Date.now() - STUCK_STALE_MS;
+  const stuck = await db
+    .select({ server_id: job_clips.server_id, updated_at: job_clips.updated_at })
+    .from(job_clips)
+    .where(
+      and(
+        isNotNull(job_clips.server_id),
+        isNull(job_clips.deleted_at),
+        or(
+          eq(job_clips.status, 'transcribing'),
+          eq(job_clips.status, 'post_processing'),
+        ),
+      ),
+    );
+  const stale = stuck
+    .filter((r) => r.updated_at < cutoff && r.server_id != null)
+    .map((r) => r.server_id as number);
+  if (stale.length === 0) return;
+
+  const { data, error } = await client
+    .from('job_clips')
+    .select(
+      'id, audio_path, transcript_raw, transcript_clean, transcript_en_raw, transcript_en_clean, status, error, updated_at',
+    )
+    .in('id', stale);
+  if (error) {
+    console.warn('reconcileStuckClipTranscripts query failed', error.message);
+    return;
+  }
+  for (const remote of (data ?? []) as Record<string, unknown>[]) {
+    await applyRemoteClip(remote);
+  }
+}
+
+function isMissingResourceError(msg: string): boolean {
+  const s = msg.toLowerCase();
+  return s.includes('not found') || s.includes('does not exist') || s.includes('no rows');
+}
+
+// Drain clip tombstones. Same shape as pushPhotoDeletes — remove audio from
+// storage, delete the server row, hard-delete locally.
+export async function pushClipDeletes(client: SupabaseClient): Promise<void> {
+  const tombstones = await db
+    .select()
+    .from(job_clips)
+    .where(eq(job_clips.sync_state, 'pending_delete'));
+
+  for (const row of tombstones) {
+    try {
+      if (row.audio_path) {
+        const { error } = await client.storage.from('job-audio').remove([row.audio_path]);
+        if (error && !isMissingResourceError(error.message)) {
+          throw new Error(error.message);
+        }
+      }
+      if (row.server_id != null) {
+        const { error } = await client.from('job_clips').delete().eq('id', row.server_id);
+        if (error && !isMissingResourceError(error.message)) {
+          throw new Error(error.message);
+        }
+      }
+      await db.delete(job_clips).where(eq(job_clips.id, row.id));
+    } catch (e) {
+      console.warn('pushClipDeletes row failed', row.id, e);
+    }
+  }
 }

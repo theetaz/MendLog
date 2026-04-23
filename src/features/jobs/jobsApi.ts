@@ -5,6 +5,11 @@ import { getSupabaseClient } from '../../lib/supabase';
 import { db } from '../../offline/db';
 import { notifyLocalDataChanged } from '../../offline/dataBus';
 import { job_clips, job_photos, jobs as jobsTable } from '../../offline/schema';
+import {
+  classifyChildSyncState,
+  computeJobSyncState,
+  type JobSyncState,
+} from '../../offline/syncState';
 import { newId } from '../../offline/uuid';
 import type { Job, JobStatus } from '../../types/job';
 
@@ -148,15 +153,20 @@ export async function updateJob(jobId: string, payload: JobUpdatePayload): Promi
   notifyLocalDataChanged();
 }
 
-// Soft delete — keeps the tombstone locally until sync drains it. The sync
-// engine currently skips pending_delete (see sync/jobs.ts TODO); this still
-// hides the job from every list query.
+// Soft delete — marks the job and its children as tombstones so the sync
+// engine's delete-push can remove them from the server (and clean up
+// attached storage files). Cascading the local delete to children keeps
+// the push order simple: children's rows carry their own server_ids.
 export async function deleteJob(jobId: string): Promise<void> {
   const nowMs = Date.now();
-  await db
-    .update(jobsTable)
-    .set({ sync_state: 'pending_delete', deleted_at: nowMs, updated_at: nowMs })
-    .where(eq(jobsTable.id, jobId));
+  const tombstone = {
+    sync_state: 'pending_delete' as const,
+    deleted_at: nowMs,
+    updated_at: nowMs,
+  };
+  await db.update(jobsTable).set(tombstone).where(eq(jobsTable.id, jobId));
+  await db.update(job_photos).set(tombstone).where(eq(job_photos.job_id, jobId));
+  await db.update(job_clips).set(tombstone).where(eq(job_clips.job_id, jobId));
   notifyLocalDataChanged();
 }
 
@@ -168,8 +178,9 @@ export async function linkClipToJob(clipId: string, jobId: string): Promise<void
   notifyLocalDataChanged();
 }
 
-// Soft delete. The sync engine doesn't yet push pending_delete (TODO) but
-// the rows are hidden from every list query via the deleted_at filter.
+// Soft delete. The tombstone is drained by the sync engine
+// (pushPhotoDeletes), which removes the storage file and the server row
+// before hard-deleting locally.
 export async function deletePhoto(photoId: string): Promise<void> {
   const nowMs = Date.now();
   await db
@@ -225,7 +236,10 @@ export interface PhotoWithUrl {
   blurhash: string | null;
   ai_description: string | null;
   ai_tags: string[];
-  status: string;
+  status: string; // pending | annotating | done | error
+  sync_state: string;
+  upload_state: string;
+  syncState: JobSyncState; // derived per-item state for the badge
 }
 
 export interface ClipWithUrl {
@@ -237,12 +251,16 @@ export interface ClipWithUrl {
   transcript_en_raw: string | null;
   transcript_en_clean: string | null;
   status: string;
+  sync_state: string;
+  upload_state: string;
+  syncState: JobSyncState;
 }
 
 export interface JobDetail {
   job: Job;
   photos: PhotoWithUrl[];
   clips: ClipWithUrl[];
+  syncState: JobSyncState; // aggregate state across the whole job
 }
 
 const SIGNED_URL_TTL = 60 * 60;
@@ -286,6 +304,8 @@ export async function fetchJobDetail(id: string): Promise<JobDetail | null> {
     maybeSignPaths('job-audio', clipPaths),
   ]);
 
+  const syncState = computeJobSyncState(jobRow, photos, clips);
+
   const job: Job = {
     id: jobRow.id,
     machine: jobRow.machine,
@@ -303,10 +323,12 @@ export async function fetchJobDetail(id: string): Promise<JobDetail | null> {
     desc: jobRow.description,
     action: jobRow.corrective_action,
     remarks: jobRow.remarks,
+    syncState,
   };
 
   return {
     job,
+    syncState,
     photos: photos.map<PhotoWithUrl>((p) => ({
       id: p.id,
       signed_url:
@@ -318,6 +340,9 @@ export async function fetchJobDetail(id: string): Promise<JobDetail | null> {
       ai_description: p.ai_description,
       ai_tags: p.ai_tags ? safeJsonArray(p.ai_tags) : [],
       status: p.status,
+      sync_state: p.sync_state,
+      upload_state: p.upload_state,
+      syncState: classifyChildSyncState(p),
     })),
     clips: clips.map<ClipWithUrl>((c) => ({
       id: c.id,
@@ -328,6 +353,9 @@ export async function fetchJobDetail(id: string): Promise<JobDetail | null> {
       transcript_en_raw: c.transcript_en_raw,
       transcript_en_clean: c.transcript_en_clean,
       status: c.status,
+      sync_state: c.sync_state,
+      upload_state: c.upload_state,
+      syncState: classifyChildSyncState(c),
     })),
   };
 }

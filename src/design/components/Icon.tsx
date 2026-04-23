@@ -138,6 +138,44 @@ const ICONS: Record<string, Renderer> = {
       <Path d="M7 18a5 5 0 0 1-1-9.9M20 16a4 4 0 0 0-2.5-7.6" {...stroke(color, weight)} />
     </>
   ),
+  cloud_check: ({ color, weight }) => (
+    <>
+      <Path
+        d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 20 13h-1a4 4 0 0 1 0 8H7z"
+        {...stroke(color, weight)}
+      />
+      <Path d="m9 14 2 2 4-4" {...stroke(color, weight)} />
+    </>
+  ),
+  cloud_up: ({ color, weight }) => (
+    <>
+      <Path
+        d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 20 13h-1a4 4 0 0 1 0 8H7z"
+        {...stroke(color, weight)}
+      />
+      <Path d="M12 18v-6m-3 3 3-3 3 3" {...stroke(color, weight)} />
+    </>
+  ),
+  cloud_dots: ({ color, weight }) => (
+    <>
+      <Path
+        d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 20 13h-1a4 4 0 0 1 0 8H7z"
+        {...stroke(color, weight)}
+      />
+      <Circle cx={9} cy={15} r={0.8} fill={color} />
+      <Circle cx={12} cy={15} r={0.8} fill={color} />
+      <Circle cx={15} cy={15} r={0.8} fill={color} />
+    </>
+  ),
+  cloud_alert: ({ color, weight }) => (
+    <>
+      <Path
+        d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 20 13h-1a4 4 0 0 1 0 8H7z"
+        {...stroke(color, weight)}
+      />
+      <Path d="M12 11v3M12 17h.01" {...stroke(color, weight)} />
+    </>
+  ),
   calendar: ({ color, weight }) => (
     <>
       <Rect x={3} y={5} width={18} height={16} rx={2} {...stroke(color, weight)} />

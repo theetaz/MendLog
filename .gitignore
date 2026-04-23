@@ -48,6 +48,9 @@ app-example
 # Internal planning docs (local-only, never commit)
 plan/
 
+# Internal data / seeds (local-only, never commit)
+data/
+
 # AI tooling / agent harness — never commit per project ground rules
 .agents/
 .claude/

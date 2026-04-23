@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import ImageView from 'react-native-image-viewing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppBar, Btn, Icon, LangBadge, Pill, SectionLabel, SyncBadge } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
@@ -46,6 +47,7 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const handleDownload = useCallback(async () => {
     if (!detail || downloading) return;
@@ -145,6 +147,17 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
     await load();
   }, [syncCtx, load]);
 
+  // Photos that actually have a resolvable URL — the lightbox only navigates
+  // through these. Placeholder cells (missing signed_url) stay unclickable.
+  const viewablePhotos = useMemo(
+    () => detail?.photos.filter((p) => !!p.signed_url) ?? [],
+    [detail?.photos],
+  );
+  const lightboxImages = useMemo(
+    () => viewablePhotos.map((p) => ({ uri: p.signed_url as string })),
+    [viewablePhotos],
+  );
+
   return (
     <View style={styles.container}>
       <AppBar
@@ -195,6 +208,10 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
                 colors={colors}
                 onRetry={retryPhoto}
                 retryingId={retrying}
+                onPressPhoto={(photoId) => {
+                  const idx = viewablePhotos.findIndex((p) => p.id === photoId);
+                  if (idx >= 0) setLightboxIndex(idx);
+                }}
               />
             </>
           )}
@@ -263,6 +280,27 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
           )}
         </ScrollView>
       )}
+
+      <ImageView
+        images={lightboxImages}
+        imageIndex={lightboxIndex ?? 0}
+        visible={lightboxIndex !== null}
+        onRequestClose={() => setLightboxIndex(null)}
+        presentationStyle="overFullScreen"
+        swipeToCloseEnabled
+        doubleTapToZoomEnabled
+        FooterComponent={({ imageIndex }) => {
+          const p = viewablePhotos[imageIndex];
+          if (!p?.ai_description) return <View />;
+          return (
+            <View style={styles.lightboxFooter}>
+              <Text style={styles.lightboxCaption} numberOfLines={4}>
+                {p.ai_description}
+              </Text>
+            </View>
+          );
+        }}
+      />
     </View>
   );
 }
@@ -316,12 +354,14 @@ function PhotoCarousel({
   colors,
   onRetry,
   retryingId,
+  onPressPhoto,
 }: {
   photos: PhotoWithUrl[];
   styles: ReturnType<typeof makeStyles>;
   colors: ThemeColors;
   onRetry: (id: string) => void;
   retryingId: string | null;
+  onPressPhoto: (photoId: string) => void;
 }) {
   return (
     <ScrollView
@@ -336,13 +376,20 @@ function PhotoCarousel({
           <View key={photo.id} style={styles.photoCell}>
             <View style={styles.photoImgWrap}>
               {photo.signed_url ? (
-                <Image
-                  source={{ uri: photo.signed_url }}
-                  placeholder={photo.blurhash ? { blurhash: photo.blurhash } : undefined}
-                  transition={250}
-                  contentFit="cover"
-                  style={styles.photoImg}
-                />
+                <Pressable
+                  onPress={() => onPressPhoto(photo.id)}
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel="Open photo"
+                  style={({ pressed }) => [styles.photoImg, pressed && styles.pressed]}
+                >
+                  <Image
+                    source={{ uri: photo.signed_url }}
+                    placeholder={photo.blurhash ? { blurhash: photo.blurhash } : undefined}
+                    transition={250}
+                    contentFit="cover"
+                    style={styles.photoImg}
+                  />
+                </Pressable>
               ) : (
                 <View style={[styles.photoImg, styles.photoMissing]}>
                   <Icon name="photo" size={28} color={colors.mute} weight={1.5} />
@@ -584,6 +631,19 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   pressed: { opacity: 0.85 },
   spacer: { flex: 1 },
+
+  lightboxFooter: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingBottom: spacing.lg,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  lightboxCaption: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 19,
+    fontFamily: fonts.sans,
+  },
 
   headerBlock: {
     gap: 6,

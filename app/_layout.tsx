@@ -23,6 +23,18 @@ import { AnimatedSplash } from '../src/features/splash/AnimatedSplash';
 import { FONT_MAP } from '../src/features/splash/fonts';
 import { ThemeProvider, useTheme } from '../src/features/theme/ThemeProvider';
 import { getSupabaseClient } from '../src/lib/supabase';
+import * as Sentry from '@sentry/react-native';
+
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    enabled: !__DEV__,
+    environment: __DEV__ ? 'development' : 'production',
+    sendDefaultPii: false,
+    enableLogs: true,
+  });
+}
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 SplashScreen.setOptions({ fade: true, duration: 300 });
@@ -31,7 +43,7 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(FONT_MAP);
   const fontsReady = fontsLoaded || !!fontError;
   const { success: dbReady, error: dbError } = useOfflineMigrations();
@@ -62,7 +74,7 @@ export default function RootLayout() {
       </ThemeProvider>
     </SafeAreaProvider>
   );
-}
+});
 
 function ThemedStatusBar() {
   const { scheme } = useTheme();

@@ -85,7 +85,15 @@
       "expo-font",
       "@react-native-community/datetimepicker",
       "expo-sqlite",
-      "expo-background-task"
+      "expo-background-task",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "mendlog",
+          "organization": "perfectus-tz"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -56,3 +56,6 @@ data/
 .claude/
 CLAUDE.md
 skills-lock.json
+.mcp.json
+
+.env.local

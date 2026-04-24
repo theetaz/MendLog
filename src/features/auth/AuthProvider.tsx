@@ -1,7 +1,12 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { clearUserScopedData } from '../../offline/clearSession';
+
+function syncSentryUser(next: Session | null) {
+  Sentry.setUser(next?.user?.id ? { id: next.user.id } : null);
+}
 
 export type AuthStatus = 'loading' | 'signed-in' | 'signed-out';
 
@@ -32,16 +37,19 @@ export function AuthProvider({ client, children }: AuthProviderProps) {
         if (!mounted.current) return;
         setSession(data.session);
         setStatus(data.session ? 'signed-in' : 'signed-out');
+        syncSentryUser(data.session);
       })
       .catch(() => {
         if (!mounted.current) return;
         setStatus('signed-out');
+        syncSentryUser(null);
       });
 
     const { data: sub } = client.auth.onAuthStateChange((_event, next) => {
       if (!mounted.current) return;
       setSession(next);
       setStatus(next ? 'signed-in' : 'signed-out');
+      syncSentryUser(next);
     });
 
     return () => {

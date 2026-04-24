@@ -124,15 +124,31 @@ export async function drainClipUploads(client: SupabaseClient): Promise<void> {
 }
 
 // Count of rows waiting on a file upload — useful for the UI sync indicator.
+// Tombstones (deleted_at set) are excluded; the drainers already skip them,
+// but without this filter the counter stayed ≥1 after a job delete and the
+// sync badge got stuck in "uploading" until pushJobDeletes ran and wiped
+// the rows locally.
 export async function pendingUploadCount(): Promise<number> {
   const photos = await db
     .select({ id: job_photos.id })
     .from(job_photos)
-    .where(and(isNotNull(job_photos.local_uri), isNull(job_photos.storage_path)));
+    .where(
+      and(
+        isNotNull(job_photos.local_uri),
+        isNull(job_photos.storage_path),
+        isNull(job_photos.deleted_at),
+      ),
+    );
   const clips = await db
     .select({ id: job_clips.id })
     .from(job_clips)
-    .where(and(isNotNull(job_clips.local_uri), isNull(job_clips.audio_path)));
+    .where(
+      and(
+        isNotNull(job_clips.local_uri),
+        isNull(job_clips.audio_path),
+        isNull(job_clips.deleted_at),
+      ),
+    );
   return photos.length + clips.length;
 }
 

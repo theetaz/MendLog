@@ -31,7 +31,10 @@ cd "$ROOT"
 
 VERSION_NAME=""
 NOTES=""
-GROUPS=""
+# Note: don't name this `GROUPS` — bash has a readonly built-in array with that
+# name (the user's group IDs, gid 20 = `staff` on macOS) that silently shadows
+# the assignment and makes --groups ignored.
+TESTER_GROUPS=""
 ALLOW_DIRTY=0
 DO_COMMIT=1
 DO_BUILD=1
@@ -40,7 +43,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --version)    VERSION_NAME="$2"; shift 2 ;;
     --notes)      NOTES="$2"; shift 2 ;;
-    --groups)     GROUPS="$2"; shift 2 ;;
+    --groups)     TESTER_GROUPS="$2"; shift 2 ;;
     --dirty)      ALLOW_DIRTY=1; shift ;;
     --no-commit)  DO_COMMIT=0; shift ;;
     --skip-build) DO_BUILD=0; shift ;;
@@ -54,7 +57,7 @@ if [ -f .env.deploy ]; then
 fi
 : "${FIREBASE_APP_ID:?FIREBASE_APP_ID not set (see .env.deploy.example)}"
 : "${FIREBASE_TOKEN:?FIREBASE_TOKEN not set — get one with: npx firebase-tools login:ci}"
-GROUPS="${GROUPS:-${FIREBASE_TESTER_GROUPS:-field-testers}}"
+TESTER_GROUPS="${TESTER_GROUPS:-${FIREBASE_TESTER_GROUPS:-field-testers}}"
 
 if [ ! -d android ]; then
   echo "android/ not found. Run 'npx expo prebuild --platform android' first." >&2
@@ -101,10 +104,10 @@ if [ -z "$NOTES" ]; then
 Commit: $(git rev-parse --short HEAD)"
 fi
 
-echo "==> distributing to Firebase (groups: $GROUPS)"
+echo "==> distributing to Firebase (groups: $TESTER_GROUPS)"
 npx --yes firebase-tools appdistribution:distribute "$APK" \
   --app "$FIREBASE_APP_ID" \
-  --groups "$GROUPS" \
+  --groups "$TESTER_GROUPS" \
   --release-notes "$NOTES"
 
 if [ "$DO_COMMIT" = 1 ]; then

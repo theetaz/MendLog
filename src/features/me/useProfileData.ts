@@ -3,6 +3,7 @@ import { subscribeLocalDataChanges } from '../../offline/dataBus';
 import { errorMessage } from '../../offline/errors';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { ActivityDay, Job } from '../../types/job';
+import { localDateIso } from '../../utils/localDate';
 import {
   computeProfileStats,
   computeProfileStreaks,
@@ -30,10 +31,7 @@ const EMPTY_STATS: ProfileStats = {
 const EMPTY_STREAKS: ProfileStreaks = { currentStreak: 0, longestStreak: 0 };
 
 function todayIso(clock: () => Date): string {
-  const d = clock();
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
-    d.getUTCDate(),
-  ).padStart(2, '0')}`;
+  return localDateIso(clock());
 }
 
 export function useProfileData(

@@ -3,6 +3,7 @@ import { subscribeLocalDataChanges } from '../../offline/dataBus';
 import { errorMessage } from '../../offline/errors';
 import type { ActivityDay, Job } from '../../types/job';
 import type { JobsRepository } from '../../repositories/JobsRepository';
+import { addDaysLocal, localDateIso } from '../../utils/localDate';
 import { formatIdle } from '../../utils/idle';
 
 export interface HomeData {
@@ -24,23 +25,17 @@ const EMPTY: Omit<HomeData, 'loading' | 'error' | 'reload'> = {
   streak: 0,
 };
 
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function offsetIso(date: Date, days: number): string {
-  const d = new Date(date);
-  d.setUTCDate(date.getUTCDate() + days);
-  return isoDate(d);
-}
-
 function computeStreak(jobs: Job[], todayIso: string): number {
   const dates = new Set(jobs.map((j) => j.date));
   let streak = 0;
-  let cursor = new Date(`${todayIso}T00:00:00Z`);
-  while (dates.has(isoDate(cursor))) {
+  // Parse todayIso as a local calendar date so day arithmetic stays in
+  // the user's timezone — walking back with setUTCDate would fall a day
+  // behind for anyone east of UTC around midnight.
+  const [y, m, d] = todayIso.split('-').map(Number);
+  let cursor = new Date(y, m - 1, d);
+  while (dates.has(localDateIso(cursor))) {
     streak++;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
+    cursor = addDaysLocal(cursor, -1);
   }
   return streak;
 }
@@ -65,8 +60,8 @@ export function useHomeData(
 
   useEffect(() => {
     let cancelled = false;
-    const todayIso = isoDate(clock());
-    const weekAgoIso = offsetIso(clock(), -6);
+    const todayIso = localDateIso(clock());
+    const weekAgoIso = localDateIso(addDaysLocal(clock(), -6));
 
     (async () => {
       try {

@@ -1,4 +1,5 @@
 import type { ActivityDay, Job } from '../../types/job';
+import { addDaysLocal, localDateIso } from '../../utils/localDate';
 
 export interface ProfileStats {
   totalJobs: number;
@@ -64,21 +65,14 @@ export function computeProfileStreaks(
     }
   }
 
-  // Walk back from today
+  // Walk back from today in the user's local timezone so the streak aligns
+  // with how jobs.date is stamped at save time.
   let currentStreak = 0;
-  const cursor = new Date(`${todayIso}T00:00:00Z`);
-   
-  while (true) {
-    const iso = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(
-      2,
-      '0',
-    )}-${String(cursor.getUTCDate()).padStart(2, '0')}`;
-    if (activeByDate.get(iso)) {
-      currentStreak++;
-      cursor.setUTCDate(cursor.getUTCDate() - 1);
-    } else {
-      break;
-    }
+  const [y, m, d] = todayIso.split('-').map(Number);
+  let cursor = new Date(y, m - 1, d);
+  while (activeByDate.get(localDateIso(cursor))) {
+    currentStreak++;
+    cursor = addDaysLocal(cursor, -1);
   }
 
   return { currentStreak, longestStreak };

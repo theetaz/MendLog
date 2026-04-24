@@ -4,6 +4,7 @@ import type {
   JobsRepository,
 } from '../../repositories/JobsRepository';
 import type { ActivityDay, Job, JobStatus, Lang } from '../../types/job';
+import { addDaysLocal, localDateIso } from '../../utils/localDate';
 import { db } from '../db';
 import { job_clips, job_photos, jobs as jobsTable } from '../schema';
 import { computeJobSyncState } from '../syncState';
@@ -121,10 +122,9 @@ export class OfflineJobsRepository implements JobsRepository {
 
   async getActivity(weeks: number): Promise<ActivityDay[]> {
     const end = this.clock();
-    const start = new Date(end);
-    start.setUTCDate(end.getUTCDate() - (weeks * 7 - 1));
-    const startIso = isoDate(start);
-    const endIso = isoDate(end);
+    const start = addDaysLocal(end, -(weeks * 7 - 1));
+    const startIso = localDateIso(start);
+    const endIso = localDateIso(end);
 
     const rows = await db
       .select({ date: jobsTable.date, c: sql<number>`count(*)`.as('c') })
@@ -145,15 +145,9 @@ export class OfflineJobsRepository implements JobsRepository {
     // full column for each week.
     const out: ActivityDay[] = [];
     for (let i = 0; i < weeks * 7; i++) {
-      const d = new Date(start);
-      d.setUTCDate(start.getUTCDate() + i);
-      const date = isoDate(d);
+      const date = localDateIso(addDaysLocal(start, i));
       out.push({ date, count: byDate.get(date) ?? 0 });
     }
     return out;
   }
-}
-
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
 }

@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Sentry from '@sentry/react-native';
 import { AppBar, Btn, Icon, SectionLabel } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
@@ -130,6 +131,18 @@ export function MeScreen({
       }
     });
   }, [busy, confirmSignOut, onSignOut]);
+
+  const handleSentryTest = useCallback(() => {
+    const eventId = Sentry.captureException(
+      new Error(`MendLog Sentry test · ${new Date().toISOString()}`),
+    );
+    Alert.alert(
+      'Sentry test sent',
+      eventId
+        ? `Event ID: ${eventId}\nCheck the Sentry feed — it should appear shortly.`
+        : 'No event ID returned — Sentry may be disabled in this build.',
+    );
+  }, []);
 
   const handleRefresh = useCallback(async () => {
     if (!repo) return;
@@ -349,6 +362,15 @@ export function MeScreen({
             <Icon name="info" size={14} color={colors.mute} weight={1.8} />
             <Text style={styles.metaText}>Version 1.0.0 · MendLog</Text>
           </View>
+          <Pressable
+            onPress={handleSentryTest}
+            hitSlop={8}
+            style={({ pressed }) => [styles.debugRow, pressed && styles.pressed]}
+            testID="me-sentry-test"
+          >
+            <Icon name="warning" size={12} color={colors.mute} weight={1.8} />
+            <Text style={styles.debugText}>Send Sentry test event</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </View>
@@ -598,5 +620,18 @@ const makeStyles = (colors: ThemeColors) =>
       fontFamily: fonts.sans,
       fontSize: 11.5,
       color: colors.mute,
+    },
+    debugRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingTop: spacing.xs,
+      alignSelf: 'flex-start',
+    },
+    debugText: {
+      fontFamily: fonts.sans,
+      fontSize: 11,
+      color: colors.mute,
+      textDecorationLine: 'underline',
     },
   });

@@ -34,9 +34,10 @@ interface JobDetailScreenProps {
   jobId: string;
   onBack(): void;
   onEdit?(jobId: string): void;
+  onDelete?(jobId: string): Promise<void> | void;
 }
 
-export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps) {
+export function JobDetailScreen({ jobId, onBack, onEdit, onDelete }: JobDetailScreenProps) {
   const colors = useColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
@@ -44,6 +45,7 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -73,6 +75,35 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
       setError(e instanceof Error ? e.message : 'Failed to load job');
     }
   }, [jobId]);
+
+  const handleDelete = useCallback(() => {
+    if (!onDelete || deleting) return;
+    Alert.alert(
+      'Delete this job?',
+      'This removes the job, its photos, and its audio clips. It will sync to the server and cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await onDelete(jobId);
+            } catch (e) {
+              Alert.alert(
+                'Could not delete',
+                e instanceof Error ? e.message : 'Unknown error',
+              );
+              setDeleting(false);
+            }
+            // Success: route handler navigates away — don't reset `deleting`
+            // to keep the button disabled until the screen unmounts.
+          },
+        },
+      ],
+    );
+  }, [jobId, onDelete, deleting]);
 
   // Refetch whenever the screen regains focus (e.g. returning from Edit)
   // so text edits / added media show up without needing a cold start.
@@ -277,6 +308,25 @@ export function JobDetailScreen({ jobId, onBack, onEdit }: JobDetailScreenProps)
             >
               Edit job
             </Btn>
+          )}
+
+          {onDelete && (
+            <Pressable
+              onPress={handleDelete}
+              disabled={deleting}
+              style={({ pressed }) => [
+                styles.deleteBtn,
+                pressed && !deleting && styles.pressed,
+                deleting && styles.deleteBtnDisabled,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Delete job"
+              testID="job-detail-delete"
+            >
+              <Text style={styles.deleteBtnText}>
+                {deleting ? 'Deleting…' : 'Delete job'}
+              </Text>
+            </Pressable>
           )}
         </ScrollView>
       )}
@@ -644,6 +694,21 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     lineHeight: 19,
     fontFamily: fonts.sans,
+  },
+
+  deleteBtn: {
+    alignSelf: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  deleteBtnDisabled: {
+    opacity: 0.5,
+  },
+  deleteBtnText: {
+    fontFamily: fonts.sansSemiBold,
+    fontSize: 15,
+    color: colors.red,
+    textAlign: 'center',
   },
 
   headerBlock: {

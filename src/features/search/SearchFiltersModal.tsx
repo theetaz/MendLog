@@ -14,6 +14,7 @@ import { SearchSelect, type SelectOption } from '../../components/form';
 import { Btn, Icon } from '../../design/components';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobStatus } from '../../types/job';
+import { localDateIso } from '../../utils/localDate';
 import { useCatalog } from '../catalog/useCatalog';
 import { STATUS_OPTIONS } from '../jobs/statusOptions';
 import { EMPTY_FILTERS, type SearchFilters } from './searchApi';
@@ -23,10 +24,6 @@ interface SearchFiltersModalProps {
   initial: SearchFilters;
   onApply(filters: SearchFilters): void;
   onClose(): void;
-}
-
-function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function parseIso(iso: string | null): Date | null {
@@ -97,7 +94,7 @@ export function SearchFiltersModal({
     if (!next) return;
     setFilters((f) => ({
       ...f,
-      [which === 'from' ? 'dateFrom' : 'dateTo']: isoLocal(next),
+      [which === 'from' ? 'dateFrom' : 'dateTo']: localDateIso(next),
     }));
   };
 

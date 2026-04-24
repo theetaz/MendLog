@@ -4,6 +4,7 @@ import { Icon } from '../design/components/Icon';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../design/tokens';
 import type { ActivityDay } from '../types/job';
 import { heatColor } from '../utils/heat';
+import { localDateIso } from '../utils/localDate';
 
 interface MonthHeatmapProps {
   counts: Map<string, number>;
@@ -18,10 +19,6 @@ interface MonthGrid {
   month: number;
   label: string;
   weeks: { day: ActivityDay; inMonth: boolean }[][];
-}
-
-function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function buildMonth(
@@ -40,7 +37,7 @@ function buildMonth(
 
   const cells: { day: ActivityDay; inMonth: boolean }[] = [];
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const iso = isoLocal(d);
+    const iso = localDateIso(d);
     cells.push({
       day: { date: iso, count: counts.get(iso) ?? 0 },
       inMonth: d.getMonth() === month,

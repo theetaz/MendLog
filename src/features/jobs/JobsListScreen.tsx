@@ -14,6 +14,7 @@ import { AppBar, Icon, SectionLabel } from '../../design/components';
 import { fonts, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { Job } from '../../types/job';
+import { addDaysLocal, localDateIso } from '../../utils/localDate';
 
 interface JobsListScreenProps {
   repo: JobsRepository;
@@ -139,9 +140,9 @@ export function JobsListBody({
 
 export function groupByRelativeDate(jobs: Job[], now: Date): Row[] {
   if (jobs.length === 0) return [];
-  const today = isoLocal(now);
-  const yesterday = isoLocal(shiftDays(now, -1));
-  const weekStart = isoLocal(shiftDays(now, -7));
+  const today = localDateIso(now);
+  const yesterday = localDateIso(addDaysLocal(now, -1));
+  const weekStart = localDateIso(addDaysLocal(now, -7));
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
   const buckets: Record<string, Job[]> = {
@@ -188,15 +189,6 @@ export function groupByRelativeDate(jobs: Job[], now: Date): Row[] {
   return rows;
 }
 
-function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function shiftDays(d: Date, delta: number): Date {
-  const next = new Date(d);
-  next.setDate(d.getDate() + delta);
-  return next;
-}
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },

@@ -1,5 +1,8 @@
 import type { ActivityDay } from '../types/job';
 
+// NOTE: demo/seed-data only. Uses UTC slicing because the pseudo-random
+// output is deterministic on a UTC seed — do NOT copy this pattern for
+// user data; use src/utils/localDate.ts's localDateIso() instead.
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }

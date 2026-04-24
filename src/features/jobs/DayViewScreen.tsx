@@ -16,6 +16,7 @@ import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design
 import type { JobsRepository } from '../../repositories/JobsRepository';
 import type { Job } from '../../types/job';
 import { formatIdle } from '../../utils/idle';
+import { addDaysLocal, localDateIso } from '../../utils/localDate';
 import { fetchPhotoThumbsForJobs, type PhotoThumb } from './photosApi';
 
 interface DayViewScreenProps {
@@ -290,11 +291,11 @@ function summarize(jobs: Job[]): DaySummary {
 }
 
 function relativeDayLabel(dateIso: string, now: Date): string | null {
-  const today = isoLocal(now);
+  const today = localDateIso(now);
   if (dateIso === today) return 'Today';
-  const yesterday = isoLocal(shiftDays(now, -1));
+  const yesterday = localDateIso(addDaysLocal(now, -1));
   if (dateIso === yesterday) return 'Yesterday';
-  const tomorrow = isoLocal(shiftDays(now, 1));
+  const tomorrow = localDateIso(addDaysLocal(now, 1));
   if (dateIso === tomorrow) return 'Tomorrow';
   return null;
 }
@@ -303,19 +304,9 @@ function siblingDays(dateIso: string): { prev: string; next: string } {
   const [y, m, d] = dateIso.split('-').map(Number);
   const base = new Date(y, (m ?? 1) - 1, d ?? 1);
   return {
-    prev: isoLocal(shiftDays(base, -1)),
-    next: isoLocal(shiftDays(base, 1)),
+    prev: localDateIso(addDaysLocal(base, -1)),
+    next: localDateIso(addDaysLocal(base, 1)),
   };
-}
-
-function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function shiftDays(d: Date, delta: number): Date {
-  const next = new Date(d);
-  next.setDate(d.getDate() + delta);
-  return next;
 }
 
 function formatFullDate(dateIso: string): string {

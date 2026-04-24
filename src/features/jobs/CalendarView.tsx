@@ -4,6 +4,7 @@ import { Icon } from '../../design/components/Icon';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
 import type { Job } from '../../types/job';
 import { heatColor } from '../../utils/heat';
+import { localDateIso } from '../../utils/localDate';
 
 interface CalendarViewProps {
   jobs?: Job[];
@@ -24,10 +25,6 @@ export function countsByDate(jobs: Job[]): Map<string, number> {
   return map;
 }
 
-function isoLocal(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 export interface MonthCell {
   date: string;
   day: number;
@@ -44,7 +41,7 @@ export function buildMonthGrid(year: number, month: number, counts: Map<string, 
   for (let i = 0; i < 42; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const iso = isoLocal(d);
+    const iso = localDateIso(d);
     out.push({
       date: iso,
       day: d.getDate(),
@@ -80,7 +77,7 @@ export function CalendarView({
     () => buildMonthGrid(cursor.year, cursor.month, counts),
     [counts, cursor.month, cursor.year],
   );
-  const todayIso = isoLocal(now);
+  const todayIso = localDateIso(now);
 
   const monthLabel = new Date(cursor.year, cursor.month, 1).toLocaleDateString(undefined, {
     month: 'long',

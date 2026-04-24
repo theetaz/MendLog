@@ -1,15 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ActivityDay, Job } from '../types/job';
+import { addDaysLocal, localDateIso } from '../utils/localDate';
 import type { JobsPage, JobsRepository } from './JobsRepository';
 import { rowToJob, type JobRow } from './rowToJob';
 
 interface ActivityRow {
   day: string;
   count: number;
-}
-
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
 }
 
 export class SupabaseJobsRepository implements JobsRepository {
@@ -67,11 +64,10 @@ export class SupabaseJobsRepository implements JobsRepository {
 
   async getActivity(weeks: number): Promise<ActivityDay[]> {
     const end = this.clock();
-    const start = new Date(end);
-    start.setUTCDate(end.getUTCDate() - (weeks * 7 - 1));
+    const start = addDaysLocal(end, -(weeks * 7 - 1));
     const { data, error } = await this.client.rpc('activity_per_day', {
-      start_date: isoDate(start),
-      end_date: isoDate(end),
+      start_date: localDateIso(start),
+      end_date: localDateIso(end),
     });
     if (error) throw error;
     const rows = (data ?? []) as ActivityRow[];
@@ -81,9 +77,7 @@ export class SupabaseJobsRepository implements JobsRepository {
     const byDate = new Map(rows.map((r) => [r.day, r.count]));
     const out: ActivityDay[] = [];
     for (let i = 0; i < weeks * 7; i++) {
-      const d = new Date(start);
-      d.setUTCDate(start.getUTCDate() + i);
-      const date = isoDate(d);
+      const date = localDateIso(addDaysLocal(start, i));
       out.push({ date, count: byDate.get(date) ?? 0 });
     }
     return out;

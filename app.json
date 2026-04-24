@@ -2,7 +2,7 @@
   "expo": {
     "name": "MendLog",
     "slug": "mendlog",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mendlog",
@@ -42,7 +42,7 @@
         "android.permission.READ_MEDIA_AUDIO"
       ],
       "package": "com.theetaz.mendlog",
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "output": "static",

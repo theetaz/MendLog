@@ -42,7 +42,7 @@
         "android.permission.READ_MEDIA_AUDIO"
       ],
       "package": "com.theetaz.mendlog",
-      "versionCode": 8
+      "versionCode": 9
     },
     "web": {
       "output": "static",

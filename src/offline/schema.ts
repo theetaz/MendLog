@@ -60,6 +60,9 @@ export const job_photos = sqliteTable('job_photos', {
   upload_state: text('upload_state').notNull().default('pending'), // pending|uploading|uploaded|failed
   upload_attempts: integer('upload_attempts').notNull().default(0),
   upload_error: text('upload_error'),
+  // ms epoch of the last upload attempt — drives the per-row backoff so a
+  // burst of syncs while offline can't burn the attempt budget in seconds.
+  last_attempt_at: integer('last_attempt_at').notNull().default(0),
 });
 
 export const job_clips = sqliteTable('job_clips', {
@@ -77,6 +80,7 @@ export const job_clips = sqliteTable('job_clips', {
   upload_state: text('upload_state').notNull().default('pending'),
   upload_attempts: integer('upload_attempts').notNull().default(0),
   upload_error: text('upload_error'),
+  last_attempt_at: integer('last_attempt_at').notNull().default(0),
 });
 
 // Catalog mirror — read-only reference data fetched from the server in bulk.

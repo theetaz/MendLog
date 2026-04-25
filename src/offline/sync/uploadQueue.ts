@@ -6,7 +6,13 @@ import { db } from '../db';
 import { job_clips, job_photos } from '../schema';
 import { now } from './time';
 
-const MAX_ATTEMPTS = 5;
+// 10 attempts × 30s minimum gap = at least 5 minutes of intermittent
+// connectivity before a row gets quarantined. Tuned for flaky-network
+// users (depot Wi-Fi, building basements) — too low and an offline burst
+// of syncs burns the budget; too high and a permanently-broken row keeps
+// retrying forever.
+const MAX_ATTEMPTS = 10;
+const MIN_RETRY_GAP_MS = 30_000;
 
 // Photo optimization budget. AI vision auto-downsizes to ~1024-1568px so
 // 1600 keeps headroom for legibility (labels, dials) without wasting
@@ -95,6 +101,11 @@ async function uploadFile(
 // doesn't exist until the parent job row has pushed, and we don't want the
 // upload blocked on that ordering.
 export async function drainPhotoUploads(client: SupabaseClient): Promise<void> {
+  const cutoff = Date.now() - MIN_RETRY_GAP_MS;
+  // Include 'uploading' so a row whose previous attempt was interrupted
+  // (process killed, JS crash) is recovered by the next pass instead of
+  // being orphaned. The state is overwritten to 'uploading' below — same
+  // row, fresh attempt.
   const pending = await db
     .select()
     .from(job_photos)
@@ -102,7 +113,11 @@ export async function drainPhotoUploads(client: SupabaseClient): Promise<void> {
       and(
         isNotNull(job_photos.local_uri),
         isNull(job_photos.storage_path),
-        or(eq(job_photos.upload_state, 'pending'), eq(job_photos.upload_state, 'failed')),
+        or(
+          eq(job_photos.upload_state, 'pending'),
+          eq(job_photos.upload_state, 'failed'),
+          eq(job_photos.upload_state, 'uploading'),
+        ),
         isNull(job_photos.deleted_at),
       ),
     )
@@ -110,10 +125,18 @@ export async function drainPhotoUploads(client: SupabaseClient): Promise<void> {
 
   for (const row of pending) {
     if (row.upload_attempts >= MAX_ATTEMPTS) continue;
+    // Per-row cooldown: skip rows whose last attempt was within the
+    // retry gap. Prevents a burst of syncs while offline from burning
+    // the attempt budget in seconds.
+    if (row.last_attempt_at && row.last_attempt_at > cutoff) continue;
     const path = `${row.user_id}/${row.id}.jpg`;
     await db
       .update(job_photos)
-      .set({ upload_state: 'uploading', upload_attempts: row.upload_attempts + 1 })
+      .set({
+        upload_state: 'uploading',
+        upload_attempts: row.upload_attempts + 1,
+        last_attempt_at: Date.now(),
+      })
       .where(eq(job_photos.id, row.id));
     try {
       const optimized = await optimizePhoto(row.local_uri!, row.width, row.height);
@@ -146,6 +169,7 @@ export async function drainPhotoUploads(client: SupabaseClient): Promise<void> {
 
 // Drain pending clip uploads. Same convention; clips are M4A.
 export async function drainClipUploads(client: SupabaseClient): Promise<void> {
+  const cutoff = Date.now() - MIN_RETRY_GAP_MS;
   const pending = await db
     .select()
     .from(job_clips)
@@ -153,7 +177,11 @@ export async function drainClipUploads(client: SupabaseClient): Promise<void> {
       and(
         isNotNull(job_clips.local_uri),
         isNull(job_clips.audio_path),
-        or(eq(job_clips.upload_state, 'pending'), eq(job_clips.upload_state, 'failed')),
+        or(
+          eq(job_clips.upload_state, 'pending'),
+          eq(job_clips.upload_state, 'failed'),
+          eq(job_clips.upload_state, 'uploading'),
+        ),
         isNull(job_clips.deleted_at),
       ),
     )
@@ -161,10 +189,15 @@ export async function drainClipUploads(client: SupabaseClient): Promise<void> {
 
   for (const row of pending) {
     if (row.upload_attempts >= MAX_ATTEMPTS) continue;
+    if (row.last_attempt_at && row.last_attempt_at > cutoff) continue;
     const path = `${row.user_id}/${row.id}.m4a`;
     await db
       .update(job_clips)
-      .set({ upload_state: 'uploading', upload_attempts: row.upload_attempts + 1 })
+      .set({
+        upload_state: 'uploading',
+        upload_attempts: row.upload_attempts + 1,
+        last_attempt_at: Date.now(),
+      })
       .where(eq(job_clips.id, row.id));
     try {
       await uploadFile(client, 'job-audio', row.local_uri!, path, 'audio/m4a');
@@ -219,14 +252,36 @@ export async function pendingUploadCount(): Promise<number> {
   return photos.length + clips.length;
 }
 
-// Marked-synced helpers; exposed so tests / tooling can reset queues if needed.
+// Move failed / interrupted rows back into the pending queue and zero the
+// attempt budget so the next drain pass picks them up. Called from the
+// "Retry uploads" affordance on the Me screen and on a NetInfo recovery
+// transition (the recovery call also touches `pending` rows whose attempt
+// counter has accumulated mid-flake — see syncManager).
 export async function resetFailedUploads(): Promise<void> {
+  const reset = {
+    upload_state: 'pending' as const,
+    upload_attempts: 0,
+    upload_error: null,
+    last_attempt_at: 0,
+  };
   await db
     .update(job_photos)
-    .set({ upload_state: 'pending', upload_attempts: 0, upload_error: null })
+    .set(reset)
     .where(inArray(job_photos.upload_state, ['failed', 'uploading']));
   await db
     .update(job_clips)
-    .set({ upload_state: 'pending', upload_attempts: 0, upload_error: null })
+    .set(reset)
     .where(inArray(job_clips.upload_state, ['failed', 'uploading']));
+}
+
+// Lighter-touch reset wired to the NetInfo offline→online transition:
+// only zero the attempt counter and cooldown timer for rows that haven't
+// hit MAX_ATTEMPTS yet. Doesn't touch upload_state — `pending` rows stay
+// pending, `uploading`/`failed` rows are already covered by the drainer's
+// new WHERE clause. This way a flaky-network user who burnt 8 attempts
+// while offline gets a fresh budget the moment connectivity recovers.
+export async function softResetUploadsOnReconnect(): Promise<void> {
+  const fresh = { upload_attempts: 0, last_attempt_at: 0, upload_error: null };
+  await db.update(job_photos).set(fresh).where(isNull(job_photos.storage_path));
+  await db.update(job_clips).set(fresh).where(isNull(job_clips.audio_path));
 }

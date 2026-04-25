@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { db } from '../db';
 import { job_clips, jobs } from '../schema';
+import { newId } from '../uuid';
 import { getMetaNumber, setMetaNumber } from './meta';
 import { toMs } from './time';
 
@@ -40,9 +41,12 @@ export async function pushClips(client: SupabaseClient): Promise<void> {
 
     try {
       if (row.sync_state === 'pending_insert' || row.server_id == null) {
+        let clipServerId: number;
+        let serverUpdatedAt: string;
         const { data, error } = await client
           .from('job_clips')
           .insert({
+            client_id: row.id,
             job_id: parentServerId,
             user_id: row.user_id,
             audio_path: row.audio_path,
@@ -50,14 +54,29 @@ export async function pushClips(client: SupabaseClient): Promise<void> {
           })
           .select('id, updated_at')
           .single();
-        if (error) throw new Error(error.message);
-        const clipServerId = data.id as number;
+        if (error) {
+          const isDup = (error as { code?: string }).code === '23505';
+          if (!isDup) throw new Error(error.message);
+          const { data: existing, error: refetchErr } = await client
+            .from('job_clips')
+            .select('id, updated_at')
+            .eq('client_id', row.id)
+            .single();
+          if (refetchErr || !existing) {
+            throw new Error(refetchErr?.message ?? 'duplicate but row not found');
+          }
+          clipServerId = existing.id as number;
+          serverUpdatedAt = existing.updated_at as string;
+        } else {
+          clipServerId = data.id as number;
+          serverUpdatedAt = data.updated_at as string;
+        }
         await db
           .update(job_clips)
           .set({
             server_id: clipServerId,
             sync_state: 'synced',
-            updated_at: toMs(data.updated_at as string),
+            updated_at: toMs(serverUpdatedAt),
           })
           .where(eq(job_clips.id, row.id));
         // Transcription kick-off lives in dispatchAllPendingAI so failed
@@ -87,24 +106,75 @@ export async function pushClips(client: SupabaseClient): Promise<void> {
 }
 
 // Merge a remote clip row into local. Mirrors applyRemotePhoto — reused by
-// pullClips and the realtime listener.
+// pullClips and the realtime listener. Inserts when no local row matches,
+// so a clean install / secondary device can hydrate clips uploaded by the
+// same account from a previous install.
 export async function applyRemoteClip(remote: Record<string, unknown>): Promise<boolean> {
   const serverId = remote.id as number;
   const remoteMs = toMs(remote.updated_at as string);
+  const clientId = (remote.client_id as string | null) ?? null;
 
-  const existing = await db
-    .select()
-    .from(job_clips)
-    .where(eq(job_clips.server_id, serverId))
-    .limit(1);
-  if (existing.length === 0) return false;
+  let local =
+    clientId
+      ? (
+          await db
+            .select()
+            .from(job_clips)
+            .where(eq(job_clips.id, clientId))
+            .limit(1)
+        )[0]
+      : undefined;
+  if (!local) {
+    local = (
+      await db
+        .select()
+        .from(job_clips)
+        .where(eq(job_clips.server_id, serverId))
+        .limit(1)
+    )[0];
+  }
 
-  const local = existing[0];
+  if (!local) {
+    const remoteJobId = remote.job_id as number | null;
+    let localJobId: string | null = null;
+    if (remoteJobId != null) {
+      const parent = await db
+        .select({ id: jobs.id })
+        .from(jobs)
+        .where(eq(jobs.server_id, remoteJobId))
+        .limit(1);
+      localJobId = parent[0]?.id ?? null;
+      if (!localJobId) return false; // parent not pulled yet
+    }
+
+    await db.insert(job_clips).values({
+      id: clientId ?? newId(),
+      server_id: serverId,
+      user_id: remote.user_id as string,
+      job_id: localJobId,
+      sync_state: 'synced',
+      created_at: toMs((remote.created_at as string) ?? (remote.updated_at as string)),
+      updated_at: remoteMs,
+      local_uri: null,
+      audio_path: (remote.audio_path as string | null) ?? null,
+      duration_ms: (remote.duration_ms as number) ?? 0,
+      transcript_raw: (remote.transcript_raw as string | null) ?? null,
+      transcript_clean: (remote.transcript_clean as string | null) ?? null,
+      transcript_en_raw: (remote.transcript_en_raw as string | null) ?? null,
+      transcript_en_clean: (remote.transcript_en_clean as string | null) ?? null,
+      status: (remote.status as string) ?? 'pending',
+      error: (remote.error as string | null) ?? null,
+      upload_state: 'uploaded',
+    });
+    return true;
+  }
+
   if (local.sync_state !== 'synced' && remoteMs <= local.updated_at) return false;
 
   await db
     .update(job_clips)
     .set({
+      server_id: serverId,
       audio_path:
         typeof remote.audio_path === 'string' ? (remote.audio_path as string) : local.audio_path,
       transcript_raw: (remote.transcript_raw as string | null) ?? local.transcript_raw,
@@ -124,15 +194,22 @@ export async function applyRemoteClip(remote: Record<string, unknown>): Promise<
 }
 
 // Pull clip updates — primarily the transcripts written by the
-// `transcribe-clip` edge function after the audio uploads.
-export async function pullClips(client: SupabaseClient, userId: string): Promise<void> {
-  const cursorMs = await getMetaNumber('clips.last_pulled_at');
+// `transcribe-clip` edge function after the audio uploads. Also hydrates
+// rows the device has never seen via applyRemoteClip's INSERT path.
+//
+// `full: true` ignores the persisted cursor and pulls from the start.
+export async function pullClips(
+  client: SupabaseClient,
+  userId: string,
+  opts: { full?: boolean } = {},
+): Promise<void> {
+  const cursorMs = opts.full ? 0 : await getMetaNumber('clips.last_pulled_at');
   const cursorIso = new Date(cursorMs).toISOString();
 
   const { data, error } = await client
     .from('job_clips')
     .select(
-      'id, audio_path, transcript_raw, transcript_clean, transcript_en_raw, transcript_en_clean, status, error, updated_at',
+      'id, client_id, job_id, user_id, audio_path, duration_ms, transcript_raw, transcript_clean, transcript_en_raw, transcript_en_clean, status, error, created_at, updated_at',
     )
     .eq('user_id', userId)
     .gt('updated_at', cursorIso)

@@ -13,7 +13,7 @@ import {
   reconcileStuckClipTranscripts,
 } from './clips';
 import { pullJobs, pushJobDeletes, pushJobs } from './jobs';
-import { getMetaNumber } from './meta';
+import { getMetaNumber, getMetaString, setMetaNumber, setMetaString } from './meta';
 import {
   pullPhotos,
   pushPhotoDeletes,
@@ -42,11 +42,31 @@ export interface SyncResult {
   durationMs: number;
 }
 
+// Single-flight guard. Concurrent triggers (foreground tick + realtime kick +
+// connectivity-recovery, etc.) used to overlap and cause duplicate INSERTs
+// against job_photos / job_clips because two passes saw the same
+// `pending_insert` row before either could mark it synced. Now they all
+// await the same promise.
+let inflightDataSync: Promise<SyncResult> | null = null;
+
 // Full data sync — user-generated rows (push) then server-side updates (pull).
 // Order matters: children FK to jobs, so parent server_ids must exist first.
 // `full: true` disables the 90-day pull window — used by the "Sync all
 // history" button in the Me screen.
 export async function runDataSync(
+  client: SupabaseClient,
+  userId: string,
+  opts: { full?: boolean } = {},
+): Promise<SyncResult> {
+  if (inflightDataSync) return inflightDataSync;
+  const run = runDataSyncInner(client, userId, opts);
+  inflightDataSync = run.finally(() => {
+    inflightDataSync = null;
+  });
+  return inflightDataSync;
+}
+
+async function runDataSyncInner(
   client: SupabaseClient,
   userId: string,
   opts: { full?: boolean } = {},
@@ -64,12 +84,25 @@ export async function runDataSync(
     await pushPhotoDeletes(client);
     await pushClipDeletes(client);
     await pushJobDeletes(client);
+    // One-shot cursor reset: previous builds' pullPhotos / pullClips only
+    // UPDATEd existing local rows by server_id and silently dropped server
+    // rows the device had never seen (clean install / secondary device).
+    // We added an INSERT path; force a single full re-pull so it can
+    // hydrate locally-missing rows. Gated on a meta flag so it only runs
+    // once per device.
+    const hydrationDone = await getMetaString('hydration.media.v1');
+    if (!hydrationDone) {
+      await setMetaNumber('photos.last_pulled_at', 0);
+      await setMetaNumber('clips.last_pulled_at', 0);
+      await setMetaString('hydration.media.v1', String(Date.now()));
+    }
+
     await pullJobs(client, userId, { full: opts.full });
     // Pull the server-side-populated fields (AI descriptions/tags, clip
     // transcripts). Runs after push so any server work triggered during
     // push has a chance to complete before our cursor advances.
-    await pullPhotos(client, userId);
-    await pullClips(client, userId);
+    await pullPhotos(client, userId, { full: opts.full });
+    await pullClips(client, userId, { full: opts.full });
     // Reconcile rows stuck locally in `annotating` / `transcribing` for
     // longer than the stale threshold. The cursor-based pull above won't
     // catch them if their server `updated_at` already fell behind our

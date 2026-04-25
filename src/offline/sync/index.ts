@@ -42,12 +42,18 @@ export interface SyncResult {
   durationMs: number;
 }
 
-// Single-flight guard. Concurrent triggers (foreground tick + realtime kick +
-// connectivity-recovery, etc.) used to overlap and cause duplicate INSERTs
-// against job_photos / job_clips because two passes saw the same
-// `pending_insert` row before either could mark it synced. Now they all
-// await the same promise.
+// Single-flight + trailing-edge re-run guard. Concurrent triggers
+// (foreground tick + realtime kick + connectivity-recovery, etc.) used to
+// overlap and cause duplicate INSERTs against job_photos / job_clips
+// because two passes saw the same `pending_insert` row before either
+// could mark it synced. We coalesce them to one in-flight pass — but
+// strict single-flight is wrong: a write that arrived during the in-flight
+// pass would be silently swallowed because the new caller awaits the
+// existing promise (whose dirty-row snapshot already passed). Trailing-
+// edge keeps a `pendingRerun` flag so any caller that arrived during the
+// run forces one more pass after it completes.
 let inflightDataSync: Promise<SyncResult> | null = null;
+let pendingRerun = false;
 
 // Full data sync — user-generated rows (push) then server-side updates (pull).
 // Order matters: children FK to jobs, so parent server_ids must exist first.
@@ -58,8 +64,18 @@ export async function runDataSync(
   userId: string,
   opts: { full?: boolean } = {},
 ): Promise<SyncResult> {
-  if (inflightDataSync) return inflightDataSync;
-  const run = runDataSyncInner(client, userId, opts);
+  if (inflightDataSync) {
+    pendingRerun = true;
+    return inflightDataSync;
+  }
+  const run = (async () => {
+    let result = await runDataSyncInner(client, userId, opts);
+    while (pendingRerun) {
+      pendingRerun = false;
+      result = await runDataSyncInner(client, userId, opts);
+    }
+    return result;
+  })();
   inflightDataSync = run.finally(() => {
     inflightDataSync = null;
   });

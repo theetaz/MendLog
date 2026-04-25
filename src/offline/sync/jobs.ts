@@ -6,10 +6,10 @@ import { newId } from '../uuid';
 import { getMetaNumber, setMetaNumber } from './meta';
 import { toMs } from './time';
 
-// Columns sent to Supabase on insert/update. `id` is owned by the server
+// Columns sent to Supabase on update. `id` is owned by the server
 // (bigserial) so we never send our local UUID. `created_at`/`updated_at`
 // are server-managed via the trigger.
-type ServerJobPayload = {
+type ServerJobUpdatePayload = {
   user_id: string;
   machine: string;
   dept: string;
@@ -26,7 +26,7 @@ type ServerJobPayload = {
   remarks: string;
 };
 
-function rowToPayload(r: typeof jobs.$inferSelect): ServerJobPayload {
+function rowToUpdatePayload(r: typeof jobs.$inferSelect): ServerJobUpdatePayload {
   return {
     user_id: r.user_id,
     machine: r.machine,
@@ -62,24 +62,46 @@ export async function pushJobs(client: SupabaseClient): Promise<void> {
   for (const row of dirty) {
     try {
       if (row.sync_state === 'pending_insert' || row.server_id == null) {
+        // Idempotent insert by client_id. Protects against a crash between
+        // the server INSERT and the local sync_state='synced' write —
+        // without this, the next launch would re-push and create a
+        // duplicate job. Mirrors the pattern in pushPhotos / pushClips.
+        let serverId: number;
+        let serverUpdatedAt: string;
         const { data, error } = await client
           .from('jobs')
-          .insert(rowToPayload(row))
+          .insert({ client_id: row.id, ...rowToUpdatePayload(row) })
           .select('id, updated_at')
           .single();
-        if (error) throw new Error(error.message);
+        if (error) {
+          const isDup = (error as { code?: string }).code === '23505';
+          if (!isDup) throw new Error(error.message);
+          const { data: existing, error: refetchErr } = await client
+            .from('jobs')
+            .select('id, updated_at')
+            .eq('client_id', row.id)
+            .single();
+          if (refetchErr || !existing) {
+            throw new Error(refetchErr?.message ?? 'duplicate but row not found');
+          }
+          serverId = existing.id as number;
+          serverUpdatedAt = existing.updated_at as string;
+        } else {
+          serverId = data.id as number;
+          serverUpdatedAt = data.updated_at as string;
+        }
         await db
           .update(jobs)
           .set({
-            server_id: data.id as number,
+            server_id: serverId,
             sync_state: 'synced',
-            updated_at: toMs(data.updated_at as string),
+            updated_at: toMs(serverUpdatedAt),
           })
           .where(eq(jobs.id, row.id));
       } else {
         const { data, error } = await client
           .from('jobs')
-          .update(rowToPayload(row))
+          .update(rowToUpdatePayload(row))
           .eq('id', row.server_id)
           .select('updated_at')
           .single();

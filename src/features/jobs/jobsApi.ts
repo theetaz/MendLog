@@ -100,6 +100,7 @@ export async function saveJob(userId: string, payload: JobFormPayload): Promise<
       mime_type: 'image/jpeg',
       width: photo.width ?? null,
       height: photo.height ?? null,
+      blurhash: photo.blurhash,
       status: 'pending',
       upload_state: 'pending',
     });
@@ -218,6 +219,7 @@ export async function addPhotoToJob(
     mime_type: 'image/jpeg',
     width: photo.width ?? null,
     height: photo.height ?? null,
+    blurhash: photo.blurhash,
     status: 'pending',
     upload_state: 'pending',
   });

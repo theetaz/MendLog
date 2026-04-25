@@ -1,14 +1,61 @@
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import { Blurhash } from 'react-native-blurhash';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '../../design/components/Icon';
 import { useMemo } from 'react';
 import { fonts, radii, spacing, type ThemeColors, useColors } from '../../design/tokens';
+
+// Cap the long edge before upload. AI vision auto-downsizes to ~1024-1568px
+// anyway, so 1600 keeps headroom for legibility (labels/screens) without
+// wasting bandwidth or storage. Phone cameras emit ~4032×3024 by default.
+const MAX_LONG_EDGE = 1600;
+const JPEG_QUALITY = 0.7;
+
+// Blurhash: 4×3 components is the standard recommended setting for
+// photographic placeholders. Encoded string is ~28 chars — cheap to store.
+const BLURHASH_X = 4;
+const BLURHASH_Y = 3;
+
+async function optimizePhoto(
+  asset: ImagePicker.ImagePickerAsset,
+): Promise<StagedPhoto> {
+  const w = asset.width ?? 0;
+  const h = asset.height ?? 0;
+  const long = Math.max(w, h);
+  // Skip the manipulator when the source is already small — avoids a
+  // pointless re-encode that can introduce its own artefacts.
+  let outUri = asset.uri;
+  let outW = w;
+  let outH = h;
+  if (long > 0 && long > MAX_LONG_EDGE) {
+    const scale = MAX_LONG_EDGE / long;
+    const out = await ImageManipulator.manipulateAsync(
+      asset.uri,
+      [{ resize: { width: Math.round(w * scale), height: Math.round(h * scale) } }],
+      { compress: JPEG_QUALITY, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    outUri = out.uri;
+    outW = out.width;
+    outH = out.height;
+  }
+  // Encode blurhash from the optimized file. Fail open: a missing hash
+  // just means no placeholder, never a failed photo capture.
+  let blurhash: string | null = null;
+  try {
+    blurhash = await Blurhash.encode(outUri, BLURHASH_X, BLURHASH_Y);
+  } catch (e) {
+    if (__DEV__) console.warn('blurhash encode failed', e);
+  }
+  return { uri: outUri, width: outW, height: outH, mimeType: 'image/jpeg', blurhash };
+}
 
 export interface StagedPhoto {
   uri: string;
   width: number;
   height: number;
   mimeType: string;
+  blurhash: string | null;
 }
 
 interface PhotoGridProps {
@@ -41,7 +88,10 @@ export function PhotoGrid({ label, photos, onChange, max = 10 }: PhotoGridProps)
 
       const pickerOptions: ImagePicker.ImagePickerOptions = {
         mediaTypes: ['images'],
-        quality: 0.85,
+        // Quality 1 here because optimizePhoto runs the manipulator
+        // afterward — picker quality + manipulator quality compounds
+        // artefacts otherwise.
+        quality: 1,
         exif: false,
       };
 
@@ -55,12 +105,7 @@ export function PhotoGrid({ label, photos, onChange, max = 10 }: PhotoGridProps)
             });
 
       if (result.canceled) return;
-      const next: StagedPhoto[] = result.assets.map((a) => ({
-        uri: a.uri,
-        width: a.width ?? 0,
-        height: a.height ?? 0,
-        mimeType: a.mimeType ?? 'image/jpeg',
-      }));
+      const next = await Promise.all(result.assets.map(optimizePhoto));
       onChange([...photos, ...next].slice(0, max));
     } catch (e) {
       Alert.alert('Could not attach photo', e instanceof Error ? e.message : 'Unknown error');

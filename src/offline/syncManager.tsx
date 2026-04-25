@@ -32,6 +32,13 @@ const AUTO_SYNC_KEY = '@mendlog/auto_sync';
 
 const DEBOUNCE_MS = 30_000;
 
+// Local-write triggers (saveJob, addPhoto, etc.) get a much shorter debounce
+// so the upload starts within seconds of the user tapping save instead of
+// waiting for the periodic 30s cadence. Long enough to coalesce a typical
+// burst of writes (job + photos + clip in one save), short enough that
+// the queue badge clears while the user is still on the screen.
+const QUICK_DEBOUNCE_MS = 3_000;
+
 export type SyncStatus = 'idle' | 'syncing' | 'ok' | 'error' | 'offline';
 
 export interface SyncLane {
@@ -206,16 +213,19 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
     await runDataLane({ full: true });
   }, [runDataLane]);
 
-  const schedule = useCallback(() => {
-    // Auto-sync off → user controls everything via manual triggers. Debounce
-    // becomes a no-op so we don't burn bandwidth silently.
-    if (!autoSync) return;
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    debounceTimer.current = setTimeout(() => {
-      void runDataLane();
-      void runCatalogLane();
-    }, DEBOUNCE_MS);
-  }, [autoSync, runDataLane, runCatalogLane]);
+  const schedule = useCallback(
+    (delayMs: number = DEBOUNCE_MS) => {
+      // Auto-sync off → user controls everything via manual triggers. Debounce
+      // becomes a no-op so we don't burn bandwidth silently.
+      if (!autoSync) return;
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(() => {
+        void runDataLane();
+        void runCatalogLane();
+      }, delayMs);
+    },
+    [autoSync, runDataLane, runCatalogLane],
+  );
 
   // Initial meta snapshot so the UI has something to show before any sync.
   useEffect(() => {
@@ -224,7 +234,19 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
 
   // Re-read counts after any local mutation — otherwise the sync section
   // and AppBar dot stay stale until the next sync completes.
-  useEffect(() => subscribeLocalDataChanges(() => void refreshMeta()), [refreshMeta]);
+  //
+  // Also kick off a quick auto-sync. Without this, creating a job leaves
+  // the upload queue waiting for the next AppState/NetInfo event (or the
+  // 15-min background tick), so the queue badge would sit at "1 pending"
+  // until the user manually pulled to sync.
+  useEffect(
+    () =>
+      subscribeLocalDataChanges(() => {
+        void refreshMeta();
+        schedule(QUICK_DEBOUNCE_MS);
+      }),
+    [refreshMeta, schedule],
+  );
 
   // First-run pull — once auth is ready, kick both lanes immediately so the
   // local DB gets populated without waiting for the 30s debounce. Screens

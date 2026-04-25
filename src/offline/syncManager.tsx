@@ -18,6 +18,7 @@ import { ensureUserScopedDataForSession } from './clearSession';
 import { subscribeLocalDataChanges } from './dataBus';
 import { subscribeRealtimeUpdates } from './realtime';
 import { dispatchAllPendingAI } from './sync/aiDispatch';
+import { resetFailedUploads, softResetUploadsOnReconnect } from './sync/uploadQueue';
 import {
   type SyncCounts,
   type SyncResult,
@@ -59,6 +60,7 @@ export interface SyncContextValue {
   triggerAll(): Promise<void>;
   triggerFullHistory(): Promise<void>;
   triggerAIRetry(): Promise<void>;
+  triggerUploadRetry(): Promise<void>;
   setAutoSync(next: boolean): void;
 }
 
@@ -204,6 +206,16 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
     await refreshMeta();
   }, [supabase, refreshMeta]);
 
+  // Move every failed / interrupted upload back to pending and zero the
+  // attempt counter, then kick a sync so the drainer picks them up. The
+  // counterpart to "Retry AI processing" — useful when a flaky-network
+  // batch burnt through MAX_ATTEMPTS and the user wants to force a redo.
+  const triggerUploadRetry = useCallback(async () => {
+    await resetFailedUploads();
+    await refreshMeta();
+    await runDataLane();
+  }, [refreshMeta, runDataLane]);
+
   // "Sync all history" — bypass the 90-day window on the next data pull.
   const triggerFullHistory = useCallback(async () => {
     if (debounceTimer.current) {
@@ -294,12 +306,19 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
     return () => unsubscribe();
   }, [supabase, userId]);
 
-  // Network state subscription.
+  // Network state subscription. On a transition from offline → online we
+  // also do a soft reset on the upload queue: zero the per-row attempt
+  // counter and cooldown timer for any row not yet uploaded, so a user
+  // who burnt 8 attempts during a flaky-network burst gets a fresh budget
+  // the moment connectivity recovers. Doesn't touch upload_state — that's
+  // already handled by the drainer's WHERE clause.
   useEffect(() => {
     const handler = (state: NetInfoState) => {
       const isOnline = !!state.isConnected && state.isInternetReachable !== false;
       setOnline((prev) => {
-        if (!prev && isOnline) schedule();
+        if (!prev && isOnline) {
+          void softResetUploadsOnReconnect().finally(() => schedule(QUICK_DEBOUNCE_MS));
+        }
         return isOnline;
       });
       if (!isOnline) {
@@ -340,6 +359,7 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
       triggerAll,
       triggerFullHistory,
       triggerAIRetry,
+      triggerUploadRetry,
       setAutoSync,
     }),
     [
@@ -353,6 +373,7 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
       triggerAll,
       triggerFullHistory,
       triggerAIRetry,
+      triggerUploadRetry,
       setAutoSync,
     ],
   );

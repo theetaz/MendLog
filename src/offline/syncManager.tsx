@@ -247,15 +247,16 @@ export function SyncProvider({ children, client }: SyncProviderProps) {
   // Re-read counts after any local mutation — otherwise the sync section
   // and AppBar dot stay stale until the next sync completes.
   //
-  // Also kick off a quick auto-sync. Without this, creating a job leaves
-  // the upload queue waiting for the next AppState/NetInfo event (or the
-  // 15-min background tick), so the queue badge would sit at "1 pending"
-  // until the user manually pulled to sync.
+  // Also kick off a quick auto-sync, but only for 'user'-source events.
+  // Sync's own tail and realtime merges fire notifyLocalDataChanged too
+  // (so screens re-render after a pull/realtime update); scheduling a
+  // sync for those would pingpong forever — every sync ends with a notify,
+  // which would queue the next sync 3s later, ad infinitum.
   useEffect(
     () =>
-      subscribeLocalDataChanges(() => {
+      subscribeLocalDataChanges((source) => {
         void refreshMeta();
-        schedule(QUICK_DEBOUNCE_MS);
+        if (source === 'user') schedule(QUICK_DEBOUNCE_MS);
       }),
     [refreshMeta, schedule],
   );

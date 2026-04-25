@@ -29,7 +29,7 @@ export function subscribeRealtimeUpdates(
           const changed = await applyRemotePhoto(
             payload.new as Record<string, unknown>,
           );
-          if (changed) notifyLocalDataChanged();
+          if (changed) notifyLocalDataChanged('realtime');
         } catch (e) {
           console.warn('realtime photo merge failed', e);
         }
@@ -48,7 +48,7 @@ export function subscribeRealtimeUpdates(
           const changed = await applyRemoteClip(
             payload.new as Record<string, unknown>,
           );
-          if (changed) notifyLocalDataChanged();
+          if (changed) notifyLocalDataChanged('realtime');
         } catch (e) {
           console.warn('realtime clip merge failed', e);
         }

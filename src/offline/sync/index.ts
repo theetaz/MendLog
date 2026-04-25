@@ -132,7 +132,10 @@ async function runDataSyncInner(
     // batch doesn't fan out hundreds of calls. Realtime picks up the
     // eventual status changes.
     await dispatchAllPendingAI(client);
-    notifyLocalDataChanged();
+    // Tag as 'sync' so the syncManager subscriber refreshes meta/UI but
+    // doesn't schedule another auto-sync. Without this tag, every sync's
+    // tail signal kicked the next sync 3s later — a 3-second forever loop.
+    notifyLocalDataChanged('sync');
     return { ok: true, durationMs: Date.now() - started };
   } catch (e) {
     return {

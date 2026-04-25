@@ -72,6 +72,35 @@ export function SyncSection() {
         colors={colors}
       />
 
+      {sync.counts.pendingUploads > 0 && (
+        <Pressable
+          onPress={() => {
+            if (sync.online && sync.data.status !== 'syncing') void sync.triggerUploadRetry();
+          }}
+          disabled={!sync.online || sync.data.status === 'syncing'}
+          style={({ pressed }) => [
+            styles.syncBtn,
+            (!sync.online || sync.data.status === 'syncing') && styles.syncBtnDisabled,
+            pressed && sync.online && sync.data.status !== 'syncing' && styles.pressed,
+          ]}
+        >
+          <Icon
+            name="cloud"
+            size={14}
+            color={!sync.online || sync.data.status === 'syncing' ? colors.mute : colors.navy}
+            weight={2}
+          />
+          <Text
+            style={[
+              styles.syncBtnLabel,
+              (!sync.online || sync.data.status === 'syncing') && styles.syncBtnLabelDisabled,
+            ]}
+          >
+            Retry stuck uploads ({sync.counts.pendingUploads})
+          </Text>
+        </Pressable>
+      )}
+
       <LaneCard
         title="Reference data"
         subtitle="Departments & machinery"

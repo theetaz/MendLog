@@ -44,6 +44,17 @@ jest.mock('expo-media-library', () => ({
   getPermissionsAsync: jest.fn(async () => ({ granted: true, status: 'granted' })),
 }));
 
+// Native upload-pipeline modules. Tests don't exercise actual capture or
+// blurhash encoding, so stubs are enough to let the module graph load.
+jest.mock('expo-image-manipulator', () => ({
+  manipulateAsync: jest.fn(async (uri) => ({ uri, width: 0, height: 0 })),
+  SaveFormat: { JPEG: 'jpeg' },
+}));
+
+jest.mock('react-native-blurhash', () => ({
+  Blurhash: { encode: jest.fn(async () => null) },
+}));
+
 jest.mock('expo-splash-screen', () => ({
   preventAutoHideAsync: jest.fn(async () => {}),
   hideAsync: jest.fn(async () => {}),
